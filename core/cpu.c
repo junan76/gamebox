@@ -1,4 +1,6 @@
 #include <stdint.h>
+#include <stddef.h>
+#include "bus.h"
 
 struct cpu_struct
 {
@@ -68,4 +70,63 @@ struct cpu_struct
     uint8_t stopped;
 };
 
-static struct cpu_struct cpu;
+static struct cpu_struct sm83_cpu;
+struct cpu_struct *cpu;
+
+static uint8_t *cpu_reg8(uint8_t encode)
+{
+    switch (encode)
+    {
+    case 0:
+        return &cpu->regs.b;
+    case 1:
+        return &cpu->regs.c;
+    case 2:
+        return &cpu->regs.d;
+    case 3:
+        return &cpu->regs.e;
+    case 4:
+        return &cpu->regs.h;
+    case 5:
+        return &cpu->regs.l;
+    case 7:
+        return &cpu->regs.a;
+    default:
+        return NULL;
+    }
+}
+
+/*
+ * 8-bit load instructions.
+ */
+
+static uint8_t ld_r8_r8(uint8_t opcode)
+{
+    uint8_t *rs, *rd;
+    rs = cpu_reg8(opcode & 0x7);
+    rd = cpu_reg8((opcode >> 3) & 0x7);
+
+    *rd = *rs;
+    cpu->regs.pc++;
+    return 4;
+}
+
+static uint8_t ld_r8_n8(uint8_t opcode)
+{
+    uint8_t *rd;
+    uint8_t n8;
+
+    rd = cpu_reg8((opcode >> 3) & 0x7);
+    n8 = bus_read8(cpu->regs.pc++);
+
+    if (rd != NULL)
+    {
+        *rd = n8;
+        return 8;
+    }
+    else
+    {
+        bus_write8(cpu->regs.hl, n8);
+        return 12;
+    }
+}
