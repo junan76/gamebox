@@ -17,21 +17,21 @@ A cross platform gameboy emulator.
 - [x] ld [n16], a
 - [x] ldh a, [c]
 - [x] ldh [c], a
-- [x] ldh a, [n16]
-- [x] ldh [n16], a
-- [x] ld a, [hl+]
-- [x] ld [hl+], a
+- [x] ldh a, [n8]
+- [x] ldh [n8], a
 - [x] ld a, [hl-]
 - [x] ld [hl-], a
+- [x] ld a, [hl+]
+- [x] ld [hl+], a
 
 ### 16-bit load instructions
 
 - [x] ld r16, n16
-- [ ] ld [n16], sp
-- [ ] ld sp, hl
-- [ ] push r16
-- [ ] pop r16
-- [ ] ld hl, sp+e8
+- [x] ld [n16], sp
+- [x] ld sp, hl
+- [x] push r16
+- [x] pop r16
+- [x] ld hl, sp+e8
 
 ### 8-bit arithmetic and logical instructions
 

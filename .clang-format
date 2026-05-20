@@ -1,0 +1,95 @@
+---
+# Linux kernel coding style, adapted for a generic C project.
+# See Documentation/process/coding-style.rst in the Linux source tree.
+
+Language: Cpp
+BasedOnStyle: LLVM
+
+# Indentation: 8-column hard tabs, no spaces.
+IndentWidth: 8
+TabWidth: 8
+UseTab: Always
+ContinuationIndentWidth: 8
+ConstructorInitializerIndentWidth: 8
+
+# Line length.
+ColumnLimit: 80
+
+# K&R braces: same line for control statements, next line for function bodies.
+BreakBeforeBraces: Custom
+BraceWrapping:
+  AfterFunction: true
+  AfterControlStatement: false
+  AfterEnum: false
+  AfterStruct: false
+  AfterUnion: false
+  AfterExternBlock: false
+  BeforeElse: false
+  BeforeCatch: false
+  IndentBraces: false
+  SplitEmptyFunction: true
+  SplitEmptyRecord: true
+
+# Pointers/refs hug the identifier: `char *p`, not `char* p`.
+PointerAlignment: Right
+DerivePointerAlignment: false
+
+# Switch/case: case labels aligned with switch (not indented).
+IndentCaseLabels: false
+
+# Spacing.
+SpaceAfterCStyleCast: false
+SpaceBeforeAssignmentOperators: true
+SpaceBeforeParens: ControlStatements
+SpaceInEmptyParentheses: false
+SpacesBeforeTrailingComments: 1
+SpacesInCStyleCastParentheses: false
+SpacesInParentheses: false
+SpacesInSquareBrackets: false
+
+# Do not collapse anything onto one line.
+AllowShortBlocksOnASingleLine: false
+AllowShortCaseLabelsOnASingleLine: false
+AllowShortFunctionsOnASingleLine: None
+AllowShortIfStatementsOnASingleLine: false
+AllowShortLoopsOnASingleLine: false
+
+# Function signatures: don't put parameters on the next line individually,
+# but don't all-cram on one line either if it overflows.
+AllowAllParametersOfDeclarationOnNextLine: false
+BinPackArguments: true
+BinPackParameters: true
+AlwaysBreakAfterReturnType: None
+AlwaysBreakAfterDefinitionReturnType: None
+
+# Don't reformat/reflow comments and strings — preserve author intent.
+ReflowComments: false
+BreakStringLiterals: false
+
+# Includes: kernel style does not sort; preserve the order the author chose.
+SortIncludes: false
+IncludeBlocks: Preserve
+
+# Alignment niceties.
+AlignAfterOpenBracket: Align
+AlignEscapedNewlines: Left
+AlignOperands: true
+AlignTrailingComments: false
+AlignConsecutiveAssignments: false
+AlignConsecutiveDeclarations: false
+
+# Misc.
+KeepEmptyLinesAtTheStartOfBlocks: false
+MaxEmptyLinesToKeep: 1
+Cpp11BracedListStyle: false
+Standard: Cpp03
+
+# Penalties copied from the kernel's .clang-format (originally from git).
+PenaltyBreakAssignment: 10
+PenaltyBreakBeforeFirstCallParameter: 30
+PenaltyBreakComment: 10
+PenaltyBreakFirstLessLess: 0
+PenaltyBreakString: 10
+PenaltyExcessCharacter: 100
+PenaltyReturnTypeOnItsOwnLine: 60
+...
