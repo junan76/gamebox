@@ -38,5 +38,21 @@ A cross platform gameboy emulator.
 ### 16-bit arithmetic instructions
 
 ### Control flow instructions
+- [x] jp n16
+- [x] jp hl
+- [x] jp cc, n16
+- [x] jr e8
+- [x] jr cc, e8
+- [x] call n16
+- [x] call cc, n16
+- [x] ret
+- [x] ret cc
+- [x] reti
 
 ### Miscellaneous instructions
+
+- [x] halt
+- [x] stop
+- [x] di
+- [x] ei
+- [x] nop

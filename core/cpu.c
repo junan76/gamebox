@@ -47,16 +47,27 @@ struct cpu_struct {
 	uint8_t ime;
 	/**
      * Interrupt enable, reg address: 0xFFFF
-     * bit 0: vblank
-     * bit 1: lcd
-     * bit 2: timer
-     * bit 3: serial
-     * bit 4: joypad
      * bits[7:5]: NONE
+     * bit 4: joypad
+     * bit 3: serial
+     * bit 2: timer
+     * bit 1: lcd
+	 * bit 0: vblank
      */
 	uint8_t ie;
+	/**
+	 * Interrult requested flag, reg address 0xFF0F
+     * bits[7:5]: NONE
+     * bit 4: joypad
+     * bit 3: serial
+     * bit 2: timer
+     * bit 1: lcd
+	 * bit 0: vblank
+	 */
+	uint8_t irq;
 
 	uint8_t halted;
+	uint8_t halt_bug;
 	uint8_t stopped;
 };
 
@@ -139,9 +150,9 @@ static uint8_t ld_hl_n8(uint8_t opcode)
 
 static uint8_t ld_a_r16(uint8_t opcode)
 {
-	if (opcode == 0x0a) {
+	if (opcode == 0x0A) {
 		cpu->regs.a = bus_read8(cpu->regs.bc);
-	} else if (opcode == 0x1a) {
+	} else if (opcode == 0x1A) {
 		cpu->regs.a = bus_read8(cpu->regs.de);
 	}
 	return 8;
@@ -267,16 +278,16 @@ static uint8_t push_r16(uint8_t opcode)
 {
 	cpu->regs.sp -= 2;
 	switch (opcode) {
-	case 0xc5:
+	case 0xC5:
 		bus_write16(cpu->regs.sp, cpu->regs.bc);
 		break;
-	case 0xd5:
+	case 0xD5:
 		bus_write16(cpu->regs.sp, cpu->regs.de);
 		break;
-	case 0xe5:
+	case 0xE5:
 		bus_write16(cpu->regs.sp, cpu->regs.hl);
 		break;
-	case 0xf5:
+	case 0xF5:
 		bus_write16(cpu->regs.sp, cpu->regs.af);
 		break;
 	}
@@ -286,16 +297,16 @@ static uint8_t push_r16(uint8_t opcode)
 static uint8_t pop_r16(uint8_t opcode)
 {
 	switch (opcode) {
-	case 0xc1:
+	case 0xC1:
 		cpu->regs.bc = bus_read16(cpu->regs.sp);
 		break;
-	case 0xd1:
+	case 0xD1:
 		cpu->regs.de = bus_read16(cpu->regs.sp);
 		break;
-	case 0xe1:
+	case 0xE1:
 		cpu->regs.hl = bus_read16(cpu->regs.sp);
 		break;
-	case 0xf1:
+	case 0xF1:
 		cpu->regs.af = bus_read16(cpu->regs.sp);
 		cpu->regs._padding = 0;
 		break;
@@ -330,7 +341,6 @@ static uint8_t ld_hl_sp_e8(uint8_t opcode)
  */
 
 /**
- * TODO:
  * Control flow instructions.
  */
 static uint8_t jp_n16(uint8_t opcode)
@@ -538,9 +548,40 @@ static uint8_t rst(uint8_t opcode)
 }
 
 /**
- * TODO:
  * Miscellaneous instructions.
  */
+static uint8_t halt(uint8_t opcode)
+{
+	if (cpu->ime == 0 && (cpu->ie & cpu->irq & 0x1F)) {
+		cpu->halt_bug = 1;
+	} else {
+		cpu->halted = 1;
+	}
+	return 4;
+}
+
+static uint8_t stop(uint8_t opcode)
+{
+	cpu->stopped = 1;
+	return 4;
+}
+
+static uint8_t di(uint8_t opcode)
+{
+	cpu->ime = 0;
+	return 4;
+}
+
+static uint8_t ei(uint8_t opcode)
+{
+	cpu->ime = 1;
+	return 4;
+}
+
+static uint8_t nop(uint8_t opcode)
+{
+	return 4;
+}
 
 /**
  * TODO:
@@ -549,6 +590,7 @@ static uint8_t rst(uint8_t opcode)
 typedef uint8_t (*opcode_handler)(uint8_t);
 static const opcode_handler opcode_handlers[256] = {
 	/*0x0_*/
+	[0x00] = nop,
 	[0x01] = ld_r16_n16,
 	[0x02] = ld_r16_a,
 	[0x06] = ld_r8_n8,
@@ -557,6 +599,7 @@ static const opcode_handler opcode_handlers[256] = {
 	[0x0E] = ld_r8_n8,
 
 	/*0x1_*/
+	[0x10] = stop,
 	[0x11] = ld_r16_n16,
 	[0x12] = ld_r16_a,
 	[0x16] = ld_r8_n8,
@@ -605,6 +648,7 @@ static const opcode_handler opcode_handlers[256] = {
 
 	/*0x7_*/
 	[0x70 ... 0x75] = ld_hl_r8,
+	[0x76] = halt,
 	[0x77] = ld_hl_r8,
 	[0x78 ... 0x7D] = ld_r8_r8,
 	[0x7E] = ld_r8_hl,
@@ -665,12 +709,14 @@ static const opcode_handler opcode_handlers[256] = {
 	[0xF0] = ldh_a_n8,
 	[0xF1] = pop_r16,
 	[0xF2] = ldh_a_c,
+	[0xF3] = di,
 	[0xF4] = ill_op,
 	[0xF5] = push_r16,
 	[0xF7] = rst,
 	[0xF8] = ld_hl_sp_e8,
 	[0xF9] = ld_sp_hl,
 	[0xFA] = ld_a_n16,
+	[0xFB] = ei,
 	[0xFC ... 0xFD] = ill_op,
 	[0xFF] = rst,
 };
