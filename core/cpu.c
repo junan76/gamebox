@@ -333,6 +333,209 @@ static uint8_t ld_hl_sp_e8(uint8_t opcode)
  * TODO:
  * Control flow instructions.
  */
+static uint8_t jp_n16(uint8_t opcode)
+{
+	cpu->regs.pc = bus_read16(cpu->regs.pc);
+	return 16;
+}
+
+static uint8_t jp_hl(uint8_t opcode)
+{
+	cpu->regs.pc = cpu->regs.hl;
+	return 4;
+}
+
+static uint8_t jp_cc_n16(uint8_t opcode)
+{
+	uint16_t jp_addr = bus_read16(cpu->regs.pc);
+	cpu->regs.pc += 2;
+
+	switch (opcode) {
+	case 0xC2:
+		if (!cpu->regs.z_flag) {
+			cpu->regs.pc = jp_addr;
+			return 16;
+		}
+		break;
+	case 0xCA:
+		if (cpu->regs.z_flag) {
+			cpu->regs.pc = jp_addr;
+			return 16;
+		}
+		break;
+	case 0xD2:
+		if (!cpu->regs.c_flag) {
+			cpu->regs.pc = jp_addr;
+			return 16;
+		}
+		break;
+	case 0xDA:
+		if (cpu->regs.c_flag) {
+			cpu->regs.pc = jp_addr;
+			return 16;
+		}
+		break;
+	}
+
+	return 12;
+}
+
+static uint8_t jr_e8(uint8_t opcode)
+{
+	int8_t e8 = bus_read8(cpu->regs.pc++);
+	cpu->regs.pc += e8;
+	return 12;
+}
+
+static uint8_t jr_cc_e8(uint8_t opcode)
+{
+	int8_t e8 = bus_read8(cpu->regs.pc++);
+
+	switch (opcode) {
+	case 0x20:
+		if (!cpu->regs.z_flag) {
+			cpu->regs.pc += e8;
+			return 12;
+		}
+		break;
+	case 0x28:
+		if (cpu->regs.z_flag) {
+			cpu->regs.pc += e8;
+			return 12;
+		}
+		break;
+	case 0x30:
+		if (!cpu->regs.c_flag) {
+			cpu->regs.pc += e8;
+			return 12;
+		}
+		break;
+	case 0x38:
+		if (cpu->regs.c_flag) {
+			cpu->regs.pc += e8;
+			return 12;
+		}
+		break;
+	}
+
+	return 8;
+}
+
+static uint8_t call_n16(uint8_t opcode)
+{
+	uint16_t call_addr = bus_read16(cpu->regs.pc);
+	cpu->regs.pc += 2;
+
+	cpu->regs.sp -= 2;
+	bus_write16(cpu->regs.sp, cpu->regs.pc);
+	cpu->regs.pc = call_addr;
+
+	return 24;
+}
+
+static uint8_t call_cc_n16(uint8_t opcode)
+{
+	uint16_t call_addr = bus_read16(cpu->regs.pc);
+	cpu->regs.pc += 2;
+
+	switch (opcode) {
+	case 0xC4:
+		if (!cpu->regs.z_flag) {
+			cpu->regs.sp -= 2;
+			bus_write16(cpu->regs.sp, cpu->regs.pc);
+			cpu->regs.pc = call_addr;
+			return 24;
+		}
+		break;
+	case 0xCC:
+		if (cpu->regs.z_flag) {
+			cpu->regs.sp -= 2;
+			bus_write16(cpu->regs.sp, cpu->regs.pc);
+			cpu->regs.pc = call_addr;
+			return 24;
+		}
+		break;
+	case 0xD4:
+		if (!cpu->regs.c_flag) {
+			cpu->regs.sp -= 2;
+			bus_write16(cpu->regs.sp, cpu->regs.pc);
+			cpu->regs.pc = call_addr;
+			return 24;
+		}
+		break;
+	case 0xDC:
+		if (cpu->regs.c_flag) {
+			cpu->regs.sp -= 2;
+			bus_write16(cpu->regs.sp, cpu->regs.pc);
+			cpu->regs.pc = call_addr;
+			return 24;
+		}
+		break;
+	}
+
+	return 12;
+}
+
+static uint8_t ret(uint8_t opcode)
+{
+	cpu->regs.pc = bus_read16(cpu->regs.sp);
+	cpu->regs.sp += 2;
+	return 16;
+}
+
+static uint8_t ret_cc(uint8_t opcode)
+{
+	uint16_t ret_addr = bus_read16(cpu->regs.sp);
+
+	switch (opcode) {
+	case 0xC0:
+		if (!cpu->regs.z_flag) {
+			cpu->regs.sp += 2;
+			cpu->regs.pc = ret_addr;
+			return 20;
+		}
+		break;
+	case 0xC8:
+		if (cpu->regs.z_flag) {
+			cpu->regs.sp += 2;
+			cpu->regs.pc = ret_addr;
+			return 20;
+		}
+		break;
+	case 0xD0:
+		if (!cpu->regs.c_flag) {
+			cpu->regs.sp += 2;
+			cpu->regs.pc = ret_addr;
+			return 20;
+		}
+		break;
+	case 0xD8:
+		if (cpu->regs.c_flag) {
+			cpu->regs.sp += 2;
+			cpu->regs.pc = ret_addr;
+			return 20;
+		}
+		break;
+	}
+
+	return 8;
+}
+
+static uint8_t reti(uint8_t opcode)
+{
+	cpu->regs.pc = bus_read16(cpu->regs.sp);
+	cpu->regs.sp += 2;
+	cpu->ime = 1;
+	return 16;
+}
+
+static uint8_t rst(uint8_t opcode)
+{
+	cpu->regs.sp -= 2;
+	bus_write16(cpu->regs.sp, cpu->regs.pc);
+	cpu->regs.pc = opcode & 0x38;
+	return 16;
+}
 
 /**
  * TODO:
@@ -357,20 +560,25 @@ static const opcode_handler opcode_handlers[256] = {
 	[0x11] = ld_r16_n16,
 	[0x12] = ld_r16_a,
 	[0x16] = ld_r8_n8,
+	[0x18] = jr_e8,
 	[0x1A] = ld_a_r16,
 	[0x1E] = ld_r8_n8,
 
 	/*0x2_*/
+	[0x20] = jr_cc_e8,
 	[0x21] = ld_r16_n16,
 	[0x22] = ldi_hl_a,
 	[0x26] = ld_r8_n8,
+	[0x28] = jr_cc_e8,
 	[0x2A] = ldi_a_hl,
 	[0x2E] = ld_r8_n8,
 
 	/*0x3_*/
+	[0x30] = jr_cc_e8,
 	[0x31] = ld_r16_n16,
 	[0x32] = ldd_hl_a,
 	[0x36] = ld_hl_n8,
+	[0x38] = jr_cc_e8,
 	[0x3A] = ldd_a_hl,
 	[0x3E] = ld_r8_n8,
 
@@ -411,15 +619,35 @@ static const opcode_handler opcode_handlers[256] = {
 	/*0xB_*/
 
 	/*0xC_*/
+	[0xC0] = ret_cc,
 	[0xC1] = pop_r16,
+	[0xC2] = jp_cc_n16,
+	[0xC3] = jp_n16,
+	[0xC4] = call_cc_n16,
 	[0xC5] = push_r16,
+	[0xC7] = rst,
+	[0xC8] = ret_cc,
+	[0xC9] = ret,
+	[0xCA] = jp_cc_n16,
+	[0xCC] = call_cc_n16,
+	[0xCD] = call_n16,
+	[0xCF] = rst,
 
 	/*0xD_*/
+	[0xD0] = ret_cc,
 	[0xD1] = pop_r16,
+	[0xD2] = jp_cc_n16,
 	[0xD3] = ill_op,
+	[0xD4] = call_cc_n16,
 	[0xD5] = push_r16,
+	[0xD7] = rst,
+	[0xD8] = ret_cc,
+	[0xD9] = reti,
+	[0xDA] = jp_cc_n16,
 	[0xDB] = ill_op,
+	[0xDC] = call_cc_n16,
 	[0xDD] = ill_op,
+	[0xDF] = rst,
 
 	/*0xE_*/
 	[0xE0] = ldh_n8_a,
@@ -427,8 +655,11 @@ static const opcode_handler opcode_handlers[256] = {
 	[0xE2] = ldh_c_a,
 	[0xE3 ... 0xE4] = ill_op,
 	[0xE5] = push_r16,
+	[0xE7] = rst,
+	[0xE9] = jp_hl,
 	[0xEA] = ld_n16_a,
 	[0xEB ... 0xED] = ill_op,
+	[0xEF] = rst,
 
 	/*0xF_*/
 	[0xF0] = ldh_a_n8,
@@ -436,8 +667,10 @@ static const opcode_handler opcode_handlers[256] = {
 	[0xF2] = ldh_a_c,
 	[0xF4] = ill_op,
 	[0xF5] = push_r16,
+	[0xF7] = rst,
 	[0xF8] = ld_hl_sp_e8,
 	[0xF9] = ld_sp_hl,
 	[0xFA] = ld_a_n16,
 	[0xFC ... 0xFD] = ill_op,
+	[0xFF] = rst,
 };
