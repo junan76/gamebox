@@ -330,10 +330,105 @@ static uint8_t ld_hl_sp_e8(uint8_t opcode)
 	return 12;
 }
 
+static uint8_t carry_bits(uint8_t a, uint8_t b)
+{
+	uint8_t s = a + b;
+	return (a & b) || ((a ^ b) & ~s);
+}
+
+static uint8_t carry_bits3(uint8_t a, uint8_t b, uint8_t c)
+{
+	uint8_t carries1 = carry_bits(a, b);
+	uint8_t carries2 = carry_bits(a + b, c);
+	return carries1 | carries2;
+}
+
 /**
  * TODO:
  * 8-bit arithmetic and logical instructions.
  */
+static uint8_t add_a_r8(uint8_t opcode)
+{
+	uint8_t *rs = cpu_reg8(opcode & 0x07);
+	uint8_t carries = carry_bits(cpu->regs.a, *rs);
+
+	cpu->regs.a += *rs;
+	cpu->regs.z_flag = (cpu->regs.a == 0);
+	cpu->regs.n_flag = 0;
+	cpu->regs.h_flag = !!(carries & 0x08);
+	cpu->regs.c_flag = !!(carries & 0x80);
+
+	return 4;
+}
+
+static uint8_t add_a_hl(uint8_t opcode)
+{
+	uint8_t value = bus_read8(cpu->regs.hl);
+	uint8_t carries = carry_bits(cpu->regs.a, value);
+
+	cpu->regs.a += value;
+	cpu->regs.z_flag = (cpu->regs.a == 0);
+	cpu->regs.n_flag = 0;
+	cpu->regs.h_flag = !!(carries & 0x08);
+	cpu->regs.c_flag = !!(carries & 0x80);
+
+	return 8;
+}
+
+static uint8_t add_a_n8(uint8_t opcode)
+{
+	uint8_t n8 = bus_read8(cpu->regs.pc++);
+	uint8_t carries = carry_bits(cpu->regs.a, n8);
+
+	cpu->regs.a += n8;
+	cpu->regs.z_flag = (cpu->regs.a == 0);
+	cpu->regs.n_flag = 0;
+	cpu->regs.h_flag = !!(carries & 0x08);
+	cpu->regs.c_flag = !!(carries & 0x80);
+
+	return 8;
+}
+
+static uint8_t adc_a_r8(uint8_t opcode)
+{
+	uint8_t *rs = cpu_reg8(opcode & 0x07);
+	uint8_t carries = carry_bits3(cpu->regs.a, *rs, cpu->regs.c_flag);
+
+	cpu->regs.a = cpu->regs.a + *rs + cpu->regs.c_flag;
+	cpu->regs.z_flag = (cpu->regs.a == 0);
+	cpu->regs.n_flag = 0;
+	cpu->regs.h_flag = !!(carries & 0x08);
+	cpu->regs.c_flag = !!(carries & 0x80);
+
+	return 4;
+}
+
+static uint8_t adc_a_hl(uint8_t opcode)
+{
+	uint8_t value = bus_read8(cpu->regs.hl);
+	uint8_t carries = carry_bits3(cpu->regs.a, value, cpu->regs.c_flag);
+
+	cpu->regs.a = cpu->regs.a + value + cpu->regs.c_flag;
+	cpu->regs.z_flag = (cpu->regs.a == 0);
+	cpu->regs.n_flag = 0;
+	cpu->regs.h_flag = !!(carries & 0x08);
+	cpu->regs.c_flag = !!(carries & 0x80);
+
+	return 8;
+}
+
+static uint8_t adc_a_n8(uint8_t opcode)
+{
+	uint8_t n8 = bus_read8(cpu->regs.pc++);
+	uint8_t carries = carry_bits3(cpu->regs.a, n8, cpu->regs.c_flag);
+
+	cpu->regs.a = cpu->regs.a + n8 + cpu->regs.c_flag;
+	cpu->regs.z_flag = (cpu->regs.a == 0);
+	cpu->regs.n_flag = 0;
+	cpu->regs.h_flag = !!(carries & 0x08);
+	cpu->regs.c_flag = !!(carries & 0x80);
+	return 8;
+}
 
 /**
  * TODO:
@@ -655,6 +750,12 @@ static const opcode_handler opcode_handlers[256] = {
 	[0x7F] = ld_r8_r8,
 
 	/*0x8_*/
+	[0x80 ... 0x85] = add_a_r8,
+	[0x86] = add_a_hl,
+	[0x87] = add_a_r8,
+	[0x88 ... 0x8D] = adc_a_r8,
+	[0x8E] = adc_a_hl,
+	[0x8F] = adc_a_r8,
 
 	/*0x9_*/
 
@@ -669,12 +770,14 @@ static const opcode_handler opcode_handlers[256] = {
 	[0xC3] = jp_n16,
 	[0xC4] = call_cc_n16,
 	[0xC5] = push_r16,
+	[0xC6] = add_a_n8,
 	[0xC7] = rst,
 	[0xC8] = ret_cc,
 	[0xC9] = ret,
 	[0xCA] = jp_cc_n16,
 	[0xCC] = call_cc_n16,
 	[0xCD] = call_n16,
+	[0xCE] = adc_a_n8,
 	[0xCF] = rst,
 
 	/*0xD_*/
