@@ -45,6 +45,7 @@ struct cpu_struct {
 
 	/*Interrupt master enable flag*/
 	uint8_t ime;
+	uint8_t ime_pending;
 	/**
      * Interrupt enable, reg address: 0xFFFF
      * bits[7:5]: NONE
@@ -91,6 +92,22 @@ static uint8_t *cpu_reg8(uint8_t encode)
 		return &cpu->regs.l;
 	case 7:
 		return &cpu->regs.a;
+	default:
+		return NULL;
+	}
+}
+
+static uint16_t *cpu_reg16(uint8_t encode, uint8_t sp_first)
+{
+	switch (encode) {
+	case 0:
+		return &cpu->regs.bc;
+	case 1:
+		return &cpu->regs.de;
+	case 2:
+		return &cpu->regs.hl;
+	case 3:
+		return sp_first ? &cpu->regs.sp : &cpu->regs.af;
 	default:
 		return NULL;
 	}
@@ -240,23 +257,11 @@ static uint8_t ldi_hl_a(uint8_t opcode)
 static uint8_t ld_r16_n16(uint8_t opcode)
 {
 	uint16_t value = bus_read16(cpu->regs.pc);
-
-	switch (opcode) {
-	case 0x01:
-		cpu->regs.bc = value;
-		break;
-	case 0x11:
-		cpu->regs.de = value;
-		break;
-	case 0x21:
-		cpu->regs.hl = value;
-		break;
-	case 0x31:
-		cpu->regs.sp = value;
-		break;
-	}
-
 	cpu->regs.pc += 2;
+
+	uint16_t *r16 = cpu_reg16((opcode >> 4) & 0x03, 1);
+	*r16 = value;
+
 	return 12;
 }
 
@@ -277,41 +282,18 @@ static uint8_t ld_sp_hl(uint8_t opcode)
 static uint8_t push_r16(uint8_t opcode)
 {
 	cpu->regs.sp -= 2;
-	switch (opcode) {
-	case 0xC5:
-		bus_write16(cpu->regs.sp, cpu->regs.bc);
-		break;
-	case 0xD5:
-		bus_write16(cpu->regs.sp, cpu->regs.de);
-		break;
-	case 0xE5:
-		bus_write16(cpu->regs.sp, cpu->regs.hl);
-		break;
-	case 0xF5:
-		bus_write16(cpu->regs.sp, cpu->regs.af);
-		break;
-	}
+	uint16_t *r16 = cpu_reg16((opcode >> 4) & 0x03, 0);
+	bus_write16(cpu->regs.sp, *r16);
 	return 16;
 }
 
 static uint8_t pop_r16(uint8_t opcode)
 {
-	switch (opcode) {
-	case 0xC1:
-		cpu->regs.bc = bus_read16(cpu->regs.sp);
-		break;
-	case 0xD1:
-		cpu->regs.de = bus_read16(cpu->regs.sp);
-		break;
-	case 0xE1:
-		cpu->regs.hl = bus_read16(cpu->regs.sp);
-		break;
-	case 0xF1:
-		cpu->regs.af = bus_read16(cpu->regs.sp);
-		cpu->regs._padding = 0;
-		break;
-	}
+	uint16_t *r16 = cpu_reg16((opcode >> 4) & 0x03, 0);
+	*r16 = bus_read16(cpu->regs.sp);
 	cpu->regs.sp += 2;
+
+	cpu->regs._padding = 0;
 	return 12;
 }
 
@@ -333,7 +315,7 @@ static uint8_t ld_hl_sp_e8(uint8_t opcode)
 static uint8_t carry_bits(uint8_t a, uint8_t b)
 {
 	uint8_t s = a + b;
-	return (a & b) || ((a ^ b) & ~s);
+	return (a & b) | ((a ^ b) & ~s);
 }
 
 static uint8_t carry_bits3(uint8_t a, uint8_t b, uint8_t c)
@@ -347,16 +329,22 @@ static uint8_t carry_bits3(uint8_t a, uint8_t b, uint8_t c)
  * TODO:
  * 8-bit arithmetic and logical instructions.
  */
+
+static void add_sync_flags(uint8_t carries)
+{
+	cpu->regs.z_flag = (cpu->regs.a == 0);
+	cpu->regs.n_flag = 0;
+	cpu->regs.h_flag = !!(carries & 0x08);
+	cpu->regs.c_flag = !!(carries & 0x80);
+}
+
 static uint8_t add_a_r8(uint8_t opcode)
 {
 	uint8_t *rs = cpu_reg8(opcode & 0x07);
 	uint8_t carries = carry_bits(cpu->regs.a, *rs);
 
 	cpu->regs.a += *rs;
-	cpu->regs.z_flag = (cpu->regs.a == 0);
-	cpu->regs.n_flag = 0;
-	cpu->regs.h_flag = !!(carries & 0x08);
-	cpu->regs.c_flag = !!(carries & 0x80);
+	add_sync_flags(carries);
 
 	return 4;
 }
@@ -367,10 +355,7 @@ static uint8_t add_a_hl(uint8_t opcode)
 	uint8_t carries = carry_bits(cpu->regs.a, value);
 
 	cpu->regs.a += value;
-	cpu->regs.z_flag = (cpu->regs.a == 0);
-	cpu->regs.n_flag = 0;
-	cpu->regs.h_flag = !!(carries & 0x08);
-	cpu->regs.c_flag = !!(carries & 0x80);
+	add_sync_flags(carries);
 
 	return 8;
 }
@@ -381,10 +366,7 @@ static uint8_t add_a_n8(uint8_t opcode)
 	uint8_t carries = carry_bits(cpu->regs.a, n8);
 
 	cpu->regs.a += n8;
-	cpu->regs.z_flag = (cpu->regs.a == 0);
-	cpu->regs.n_flag = 0;
-	cpu->regs.h_flag = !!(carries & 0x08);
-	cpu->regs.c_flag = !!(carries & 0x80);
+	add_sync_flags(carries);
 
 	return 8;
 }
@@ -395,10 +377,7 @@ static uint8_t adc_a_r8(uint8_t opcode)
 	uint8_t carries = carry_bits3(cpu->regs.a, *rs, cpu->regs.c_flag);
 
 	cpu->regs.a = cpu->regs.a + *rs + cpu->regs.c_flag;
-	cpu->regs.z_flag = (cpu->regs.a == 0);
-	cpu->regs.n_flag = 0;
-	cpu->regs.h_flag = !!(carries & 0x08);
-	cpu->regs.c_flag = !!(carries & 0x80);
+	add_sync_flags(carries);
 
 	return 4;
 }
@@ -409,10 +388,7 @@ static uint8_t adc_a_hl(uint8_t opcode)
 	uint8_t carries = carry_bits3(cpu->regs.a, value, cpu->regs.c_flag);
 
 	cpu->regs.a = cpu->regs.a + value + cpu->regs.c_flag;
-	cpu->regs.z_flag = (cpu->regs.a == 0);
-	cpu->regs.n_flag = 0;
-	cpu->regs.h_flag = !!(carries & 0x08);
-	cpu->regs.c_flag = !!(carries & 0x80);
+	add_sync_flags(carries);
 
 	return 8;
 }
@@ -423,10 +399,8 @@ static uint8_t adc_a_n8(uint8_t opcode)
 	uint8_t carries = carry_bits3(cpu->regs.a, n8, cpu->regs.c_flag);
 
 	cpu->regs.a = cpu->regs.a + n8 + cpu->regs.c_flag;
-	cpu->regs.z_flag = (cpu->regs.a == 0);
-	cpu->regs.n_flag = 0;
-	cpu->regs.h_flag = !!(carries & 0x08);
-	cpu->regs.c_flag = !!(carries & 0x80);
+	add_sync_flags(carries);
+
 	return 8;
 }
 
@@ -590,34 +564,32 @@ static uint8_t ret(uint8_t opcode)
 
 static uint8_t ret_cc(uint8_t opcode)
 {
-	uint16_t ret_addr = bus_read16(cpu->regs.sp);
-
 	switch (opcode) {
 	case 0xC0:
 		if (!cpu->regs.z_flag) {
+			cpu->regs.pc = bus_read16(cpu->regs.sp);
 			cpu->regs.sp += 2;
-			cpu->regs.pc = ret_addr;
 			return 20;
 		}
 		break;
 	case 0xC8:
 		if (cpu->regs.z_flag) {
+			cpu->regs.pc = bus_read16(cpu->regs.sp);
 			cpu->regs.sp += 2;
-			cpu->regs.pc = ret_addr;
 			return 20;
 		}
 		break;
 	case 0xD0:
 		if (!cpu->regs.c_flag) {
+			cpu->regs.pc = bus_read16(cpu->regs.sp);
 			cpu->regs.sp += 2;
-			cpu->regs.pc = ret_addr;
 			return 20;
 		}
 		break;
 	case 0xD8:
 		if (cpu->regs.c_flag) {
+			cpu->regs.pc = bus_read16(cpu->regs.sp);
 			cpu->regs.sp += 2;
-			cpu->regs.pc = ret_addr;
 			return 20;
 		}
 		break;
@@ -657,6 +629,7 @@ static uint8_t halt(uint8_t opcode)
 
 static uint8_t stop(uint8_t opcode)
 {
+	bus_read8(cpu->regs.pc++);
 	cpu->stopped = 1;
 	return 4;
 }
@@ -664,12 +637,17 @@ static uint8_t stop(uint8_t opcode)
 static uint8_t di(uint8_t opcode)
 {
 	cpu->ime = 0;
+	cpu->ime_pending = 0;
 	return 4;
 }
 
 static uint8_t ei(uint8_t opcode)
 {
-	cpu->ime = 1;
+	/**
+	 * TODO:
+	 * Enable ime after the next instruction when ime_pending is true.
+	 */
+	cpu->ime_pending = 1;
 	return 4;
 }
 
