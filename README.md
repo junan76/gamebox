@@ -46,6 +46,26 @@ A cross platform gameboy emulator.
 - [x] sbc a, r8
 - [x] sbc a, [hl]
 - [x] sbc a, n8
+- [x] cp a, r8
+- [x] cp a, [hl]
+- [x] cp a, n8
+- [x] inc r8
+- [x] inc [hl]
+- [x] dec r8
+- [x] dec [hl]
+- [x] and a, r8
+- [x] and a, [hl]
+- [x] and a, n8
+- [x] or a, r8
+- [x] or a, [hl]
+- [x] or a, n8
+- [x] xor a, r8
+- [x] xor a, [hl]
+- [x] xor a, n8
+- [x] ccf
+- [x] scf
+- [x] daa
+- [x] cpl
 
 ### 16-bit arithmetic instructions
 

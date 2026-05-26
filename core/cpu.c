@@ -313,7 +313,6 @@ static uint8_t ld_hl_sp_e8(uint8_t opcode)
 }
 
 /**
- * TODO:
  * 8-bit arithmetic and logical instructions.
  */
 static uint8_t carry_bits(uint8_t a, uint8_t b)
@@ -488,6 +487,230 @@ static uint8_t sbc_a_n8(uint8_t opcode)
 	cpu->regs.a = cpu->regs.a - n8 - cpu->regs.c_flag;
 	sub_sync_flags(carries);
 	return 8;
+}
+
+static void cp_sync_flags(uint8_t result, uint8_t carries)
+{
+	cpu->regs.z_flag = (result == 0);
+	cpu->regs.n_flag = 1;
+	cpu->regs.h_flag = !!(carries & 0x08);
+	cpu->regs.c_flag = !!(carries & 0x80);
+}
+
+static uint8_t cp_a_r8(uint8_t opcode)
+{
+	uint8_t *r8 = cpu_reg8(opcode & 0x07);
+	uint8_t carries = sub_carry_bits(cpu->regs.a, *r8);
+	cp_sync_flags(cpu->regs.a - *r8, carries);
+	return 4;
+}
+
+static uint8_t cp_a_hl(uint8_t opcode)
+{
+	uint8_t value = bus_read8(cpu->regs.hl);
+	uint8_t carries = sub_carry_bits(cpu->regs.a, value);
+	cp_sync_flags(cpu->regs.a - value, carries);
+	return 8;
+}
+
+static uint8_t cp_a_n8(uint8_t opcode)
+{
+	uint8_t n8 = bus_read8(cpu->regs.pc++);
+	uint8_t carries = sub_carry_bits(cpu->regs.a, n8);
+	cp_sync_flags(cpu->regs.a - n8, carries);
+	return 8;
+}
+
+static void inc_sync_flags(uint8_t result, uint8_t carries)
+{
+	cpu->regs.z_flag = (result == 0);
+	cpu->regs.n_flag = 0;
+	cpu->regs.h_flag = !!(carries & 0x08);
+}
+
+static uint8_t inc_r8(uint8_t opcode)
+{
+	uint8_t *rd = cpu_reg8((opcode >> 3) & 0x07);
+	uint8_t carries = carry_bits(*rd, 1);
+	*rd += 1;
+	inc_sync_flags(*rd, carries);
+	return 4;
+}
+
+static uint8_t inc_hl(uint8_t opcode)
+{
+	uint8_t value = bus_read8(cpu->regs.hl);
+	uint8_t carries = carry_bits(value, 1);
+	value += 1;
+	bus_write8(cpu->regs.hl, value);
+	inc_sync_flags(value, carries);
+	return 12;
+}
+
+static void dec_sync_flags(uint8_t result, uint8_t carries)
+{
+	cpu->regs.z_flag = (result == 0);
+	cpu->regs.n_flag = 1;
+	cpu->regs.h_flag = !!(carries & 0x08);
+}
+
+static uint8_t dec_r8(uint8_t opcode)
+{
+	uint8_t *rd = cpu_reg8((opcode >> 3) & 0x07);
+	uint8_t carries = sub_carry_bits(*rd, 1);
+	*rd -= 1;
+	dec_sync_flags(*rd, carries);
+	return 4;
+}
+
+static uint8_t dec_hl(uint8_t opcode)
+{
+	uint8_t value = bus_read8(cpu->regs.hl);
+	uint8_t carries = sub_carry_bits(value, 1);
+	value -= 1;
+	bus_write8(cpu->regs.hl, value);
+	dec_sync_flags(value, carries);
+	return 12;
+}
+
+static void and_sync_flags(void)
+{
+	cpu->regs.z_flag = (cpu->regs.a == 0);
+	cpu->regs.n_flag = 0;
+	cpu->regs.h_flag = 1;
+	cpu->regs.c_flag = 0;
+}
+
+static uint8_t and_a_r8(uint8_t opcode)
+{
+	uint8_t *rs = cpu_reg8(opcode & 0x07);
+	cpu->regs.a &= *rs;
+	and_sync_flags();
+	return 4;
+}
+
+static uint8_t and_a_hl(uint8_t opcode)
+{
+	uint8_t value = bus_read8(cpu->regs.hl);
+	cpu->regs.a &= value;
+	and_sync_flags();
+	return 8;
+}
+
+static uint8_t and_a_n8(uint8_t opcode)
+{
+	uint8_t n8 = bus_read8(cpu->regs.pc++);
+	cpu->regs.a &= n8;
+	and_sync_flags();
+	return 8;
+}
+
+static void or_xor_sync_flags(void)
+{
+	cpu->regs.z_flag = (cpu->regs.a == 0);
+	cpu->regs.n_flag = 0;
+	cpu->regs.h_flag = 0;
+	cpu->regs.c_flag = 0;
+}
+
+static uint8_t or_a_r8(uint8_t opcode)
+{
+	uint8_t *rs = cpu_reg8(opcode & 0x07);
+	cpu->regs.a |= *rs;
+	or_xor_sync_flags();
+	return 4;
+}
+
+static uint8_t or_a_hl(uint8_t opcode)
+{
+	uint8_t value = bus_read8(cpu->regs.hl);
+	cpu->regs.a |= value;
+	or_xor_sync_flags();
+	return 8;
+}
+
+static uint8_t or_a_n8(uint8_t opcode)
+{
+	uint8_t n8 = bus_read8(cpu->regs.pc++);
+	cpu->regs.a |= n8;
+	or_xor_sync_flags();
+	return 8;
+}
+
+static uint8_t xor_a_r8(uint8_t opcode)
+{
+	uint8_t *rs = cpu_reg8(opcode & 0x07);
+	cpu->regs.a ^= *rs;
+	or_xor_sync_flags();
+	return 4;
+}
+
+static uint8_t xor_a_hl(uint8_t opcode)
+{
+	uint8_t value = bus_read8(cpu->regs.hl);
+	cpu->regs.a ^= value;
+	or_xor_sync_flags();
+	return 8;
+}
+
+static uint8_t xor_a_n8(uint8_t opcode)
+{
+	uint8_t n8 = bus_read8(cpu->regs.pc++);
+	cpu->regs.a ^= n8;
+	or_xor_sync_flags();
+	return 8;
+}
+
+static uint8_t ccf(uint8_t opcode)
+{
+	cpu->regs.n_flag = 0;
+	cpu->regs.h_flag = 0;
+	cpu->regs.c_flag = 1 - cpu->regs.c_flag;
+	return 4;
+}
+
+static uint8_t scf(uint8_t opcode)
+{
+	cpu->regs.n_flag = 0;
+	cpu->regs.h_flag = 0;
+	cpu->regs.c_flag = 1;
+	return 4;
+}
+
+static uint8_t daa(uint8_t opcode)
+{
+	uint8_t adjust = 0;
+
+	if (cpu->regs.n_flag == 0) {
+		if (cpu->regs.h_flag || (cpu->regs.a & 0x0F) > 0x09) {
+			adjust += 0x06;
+		}
+		if (cpu->regs.c_flag || cpu->regs.a > 0x99) {
+			adjust += 0x60;
+			cpu->regs.c_flag = 1;
+		}
+		cpu->regs.a += adjust;
+	} else {
+		if (cpu->regs.h_flag) {
+			adjust += 0x06;
+		}
+		if (cpu->regs.c_flag) {
+			adjust += 0x60;
+		}
+		cpu->regs.a -= adjust;
+	}
+
+	cpu->regs.z_flag = (cpu->regs.a == 0);
+	cpu->regs.h_flag = 0;
+	return 4;
+}
+
+static uint8_t cpl(uint8_t opcode)
+{
+	cpu->regs.a = ~cpu->regs.a;
+	cpu->regs.n_flag = 1;
+	cpu->regs.h_flag = 1;
+	return 4;
 }
 
 /**
@@ -752,37 +975,57 @@ static const opcode_handler opcode_handlers[256] = {
 	[0x00] = nop,
 	[0x01] = ld_r16_n16,
 	[0x02] = ld_r16_a,
+	[0x04] = inc_r8,
+	[0x05] = dec_r8,
 	[0x06] = ld_r8_n8,
 	[0x08] = ld_n16_sp,
 	[0x0A] = ld_a_r16,
+	[0x0C] = inc_r8,
+	[0x0D] = dec_r8,
 	[0x0E] = ld_r8_n8,
 
 	/*0x1_*/
 	[0x10] = stop,
 	[0x11] = ld_r16_n16,
 	[0x12] = ld_r16_a,
+	[0x14] = inc_r8,
+	[0x15] = dec_r8,
 	[0x16] = ld_r8_n8,
 	[0x18] = jr_e8,
 	[0x1A] = ld_a_r16,
+	[0x1C] = inc_r8,
+	[0x1D] = dec_r8,
 	[0x1E] = ld_r8_n8,
 
 	/*0x2_*/
 	[0x20] = jr_cc_e8,
 	[0x21] = ld_r16_n16,
 	[0x22] = ldi_hl_a,
+	[0x24] = inc_r8,
+	[0x25] = dec_r8,
 	[0x26] = ld_r8_n8,
+	[0x27] = daa,
 	[0x28] = jr_cc_e8,
 	[0x2A] = ldi_a_hl,
+	[0x2C] = inc_r8,
+	[0x2D] = dec_r8,
 	[0x2E] = ld_r8_n8,
+	[0x2F] = cpl,
 
 	/*0x3_*/
 	[0x30] = jr_cc_e8,
 	[0x31] = ld_r16_n16,
 	[0x32] = ldd_hl_a,
+	[0x34] = inc_hl,
+	[0x35] = dec_hl,
 	[0x36] = ld_hl_n8,
+	[0x37] = scf,
 	[0x38] = jr_cc_e8,
 	[0x3A] = ldd_a_hl,
+	[0x3C] = inc_r8,
+	[0x3D] = dec_r8,
 	[0x3E] = ld_r8_n8,
+	[0x3F] = ccf,
 
 	/*0x4_*/
 	[0x40 ... 0x45] = ld_r8_r8,
@@ -830,8 +1073,20 @@ static const opcode_handler opcode_handlers[256] = {
 	[0x9F] = sbc_a_r8,
 
 	/*0xA_*/
+	[0xA0 ... 0xA5] = and_a_r8,
+	[0xA6] = and_a_hl,
+	[0xA7] = and_a_r8,
+	[0xA8 ... 0xAD] = xor_a_r8,
+	[0xAE] = xor_a_hl,
+	[0xAF] = xor_a_r8,
 
 	/*0xB_*/
+	[0xB0 ... 0xB5] = or_a_r8,
+	[0xB6] = or_a_hl,
+	[0xB7] = or_a_r8,
+	[0xB8 ... 0xBD] = cp_a_r8,
+	[0xBE] = cp_a_hl,
+	[0xBF] = cp_a_r8,
 
 	/*0xC_*/
 	[0xC0] = ret_cc,
@@ -874,10 +1129,12 @@ static const opcode_handler opcode_handlers[256] = {
 	[0xE2] = ldh_c_a,
 	[0xE3 ... 0xE4] = ill_op,
 	[0xE5] = push_r16,
+	[0xE6] = and_a_n8,
 	[0xE7] = rst,
 	[0xE9] = jp_hl,
 	[0xEA] = ld_n16_a,
 	[0xEB ... 0xED] = ill_op,
+	[0xEE] = xor_a_n8,
 	[0xEF] = rst,
 
 	/*0xF_*/
@@ -887,11 +1144,13 @@ static const opcode_handler opcode_handlers[256] = {
 	[0xF3] = di,
 	[0xF4] = ill_op,
 	[0xF5] = push_r16,
+	[0xF6] = or_a_n8,
 	[0xF7] = rst,
 	[0xF8] = ld_hl_sp_e8,
 	[0xF9] = ld_sp_hl,
 	[0xFA] = ld_a_n16,
 	[0xFB] = ei,
 	[0xFC ... 0xFD] = ill_op,
+	[0xFE] = cp_a_n8,
 	[0xFF] = rst,
 };
