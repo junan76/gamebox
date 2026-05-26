@@ -34,6 +34,18 @@ A cross platform gameboy emulator.
 - [x] ld hl, sp+e8
 
 ### 8-bit arithmetic and logical instructions
+- [x] add a, r8
+- [x] add a, [hl]
+- [x] add a, n8
+- [x] adc a, r8
+- [x] adc a, [hl]
+- [x] adc a, n8
+- [x] sub a, r8
+- [x] sub a, [hl]
+- [x] sub a, n8
+- [x] sbc a, r8
+- [x] sbc a, [hl]
+- [x] sbc a, n8
 
 ### 16-bit arithmetic instructions
 

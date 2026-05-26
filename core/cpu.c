@@ -312,6 +312,10 @@ static uint8_t ld_hl_sp_e8(uint8_t opcode)
 	return 12;
 }
 
+/**
+ * TODO:
+ * 8-bit arithmetic and logical instructions.
+ */
 static uint8_t carry_bits(uint8_t a, uint8_t b)
 {
 	uint8_t s = a + b;
@@ -324,11 +328,6 @@ static uint8_t carry_bits3(uint8_t a, uint8_t b, uint8_t c)
 	uint8_t carries2 = carry_bits(a + b, c);
 	return carries1 | carries2;
 }
-
-/**
- * TODO:
- * 8-bit arithmetic and logical instructions.
- */
 
 static void add_sync_flags(uint8_t carries)
 {
@@ -401,6 +400,93 @@ static uint8_t adc_a_n8(uint8_t opcode)
 	cpu->regs.a = cpu->regs.a + n8 + cpu->regs.c_flag;
 	add_sync_flags(carries);
 
+	return 8;
+}
+
+static uint8_t sub_carry_bits(uint8_t a, uint8_t b)
+{
+	uint8_t result = 0;
+	if (a < b) {
+		result |= 0x80;
+	}
+	if ((a & 0x0F) < (b & 0x0F)) {
+		result |= 0x08;
+	}
+	return result;
+}
+
+static uint8_t sub_carry_bits3(uint8_t a, uint8_t b, uint8_t c)
+{
+	uint8_t c1 = sub_carry_bits(a, b);
+	uint8_t c2 = sub_carry_bits(a - b, c);
+	return c1 | c2;
+}
+
+static void sub_sync_flags(uint8_t carries)
+{
+	cpu->regs.z_flag = (cpu->regs.a == 0);
+	cpu->regs.n_flag = 1;
+	cpu->regs.h_flag = !!(carries & 0x08);
+	cpu->regs.c_flag = !!(carries & 0x80);
+}
+
+static uint8_t sub_a_r8(uint8_t opcode)
+{
+	uint8_t *r8 = cpu_reg8(opcode & 0x7);
+	uint8_t carries = sub_carry_bits(cpu->regs.a, *r8);
+
+	cpu->regs.a -= *r8;
+	sub_sync_flags(carries);
+	return 4;
+}
+
+static uint8_t sub_a_hl(uint8_t opcode)
+{
+	uint8_t value = bus_read8(cpu->regs.hl);
+	uint8_t carries = sub_carry_bits(cpu->regs.a, value);
+
+	cpu->regs.a -= value;
+	sub_sync_flags(carries);
+	return 8;
+}
+
+static uint8_t sub_a_n8(uint8_t opcode)
+{
+	uint8_t n8 = bus_read8(cpu->regs.pc++);
+	uint8_t carries = sub_carry_bits(cpu->regs.a, n8);
+
+	cpu->regs.a -= n8;
+	sub_sync_flags(carries);
+	return 8;
+}
+
+static uint8_t sbc_a_r8(uint8_t opcode)
+{
+	uint8_t *r8 = cpu_reg8(opcode & 0x07);
+	uint8_t carries = sub_carry_bits3(cpu->regs.a, *r8, cpu->regs.c_flag);
+
+	cpu->regs.a = cpu->regs.a - *r8 - cpu->regs.c_flag;
+	sub_sync_flags(carries);
+	return 4;
+}
+
+static uint8_t sbc_a_hl(uint8_t opcode)
+{
+	uint8_t value = bus_read8(cpu->regs.hl);
+	uint8_t carries = sub_carry_bits3(cpu->regs.a, value, cpu->regs.c_flag);
+
+	cpu->regs.a = cpu->regs.a - value - cpu->regs.c_flag;
+	sub_sync_flags(carries);
+	return 8;
+}
+
+static uint8_t sbc_a_n8(uint8_t opcode)
+{
+	uint8_t n8 = bus_read8(cpu->regs.pc++);
+	uint8_t carries = sub_carry_bits3(cpu->regs.a, n8, cpu->regs.c_flag);
+
+	cpu->regs.a = cpu->regs.a - n8 - cpu->regs.c_flag;
+	sub_sync_flags(carries);
 	return 8;
 }
 
@@ -736,6 +822,12 @@ static const opcode_handler opcode_handlers[256] = {
 	[0x8F] = adc_a_r8,
 
 	/*0x9_*/
+	[0x90 ... 0x95] = sub_a_r8,
+	[0x96] = sub_a_hl,
+	[0x97] = sub_a_r8,
+	[0x98 ... 0x9D] = sbc_a_r8,
+	[0x9E] = sbc_a_hl,
+	[0x9F] = sbc_a_r8,
 
 	/*0xA_*/
 
@@ -765,6 +857,7 @@ static const opcode_handler opcode_handlers[256] = {
 	[0xD3] = ill_op,
 	[0xD4] = call_cc_n16,
 	[0xD5] = push_r16,
+	[0xD6] = sub_a_n8,
 	[0xD7] = rst,
 	[0xD8] = ret_cc,
 	[0xD9] = reti,
@@ -772,6 +865,7 @@ static const opcode_handler opcode_handlers[256] = {
 	[0xDB] = ill_op,
 	[0xDC] = call_cc_n16,
 	[0xDD] = ill_op,
+	[0xDE] = sbc_a_n8,
 	[0xDF] = rst,
 
 	/*0xE_*/
