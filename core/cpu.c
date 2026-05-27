@@ -1266,6 +1266,315 @@ static const opcode_handler opcode_handlers[256] = {
 	[0xFF] = rst,
 };
 
+/**
+ * Rotate, shift and bit operation instructions.
+ */
+static uint8_t rlc_r8(uint8_t opcode)
+{
+	uint8_t *r8 = cpu_reg8(opcode & 0x07);
+	uint8_t bit7 = !!(*r8 & 0x80);
+	*r8 <<= 1;
+	*r8 |= bit7;
+
+	cpu->regs.z_flag = (*r8 == 0);
+	cpu->regs.n_flag = 0;
+	cpu->regs.h_flag = 0;
+	cpu->regs.c_flag = bit7;
+
+	return 8;
+}
+
+static uint8_t rlc_hl(uint8_t opcode)
+{
+	uint8_t value = bus_read8(cpu->regs.hl);
+	uint8_t bit7 = !!(value & 0x80);
+	value <<= 1;
+	value |= bit7;
+	bus_write8(cpu->regs.hl, value);
+
+	cpu->regs.z_flag = (value == 0);
+	cpu->regs.n_flag = 0;
+	cpu->regs.h_flag = 0;
+	cpu->regs.c_flag = bit7;
+
+	return 16;
+}
+
+static uint8_t rrc_r8(uint8_t opcode)
+{
+	uint8_t *r8 = cpu_reg8(opcode & 0x07);
+	uint8_t bit0 = !!(*r8 & 0x01);
+	*r8 >>= 1;
+	*r8 |= (bit0 << 7);
+
+	cpu->regs.z_flag = (*r8 == 0);
+	cpu->regs.n_flag = 0;
+	cpu->regs.h_flag = 0;
+	cpu->regs.c_flag = bit0;
+
+	return 8;
+}
+
+static uint8_t rrc_hl(uint8_t opcode)
+{
+	uint8_t value = bus_read8(cpu->regs.hl);
+	uint8_t bit0 = !!(value & 0x01);
+	value >>= 1;
+	value |= (bit0 << 7);
+	bus_write8(cpu->regs.hl, value);
+
+	cpu->regs.z_flag = (value == 0);
+	cpu->regs.n_flag = 0;
+	cpu->regs.h_flag = 0;
+	cpu->regs.c_flag = bit0;
+
+	return 16;
+}
+
+static uint8_t rl_r8(uint8_t opcode)
+{
+	uint8_t *r8 = cpu_reg8(opcode & 0x07);
+	uint8_t bit7 = !!(*r8 & 0x80);
+	*r8 <<= 1;
+	*r8 |= cpu->regs.c_flag;
+
+	cpu->regs.z_flag = (*r8 == 0);
+	cpu->regs.n_flag = 0;
+	cpu->regs.h_flag = 0;
+	cpu->regs.c_flag = bit7;
+
+	return 8;
+}
+
+static uint8_t rl_hl(uint8_t opcode)
+{
+	uint8_t value = bus_read8(cpu->regs.hl);
+	uint8_t bit7 = !!(value & 0x80);
+	value <<= 1;
+	value |= cpu->regs.c_flag;
+	bus_write8(cpu->regs.hl, value);
+
+	cpu->regs.z_flag = (value == 0);
+	cpu->regs.n_flag = 0;
+	cpu->regs.h_flag = 0;
+	cpu->regs.c_flag = bit7;
+
+	return 16;
+}
+
+static uint8_t rr_r8(uint8_t opcode)
+{
+	uint8_t *r8 = cpu_reg8(opcode & 0x07);
+	uint8_t bit0 = !!(*r8 & 0x01);
+	*r8 >>= 1;
+	*r8 |= (cpu->regs.c_flag << 7);
+
+	cpu->regs.z_flag = (*r8 == 0);
+	cpu->regs.n_flag = 0;
+	cpu->regs.h_flag = 0;
+	cpu->regs.c_flag = bit0;
+
+	return 8;
+}
+
+static uint8_t rr_hl(uint8_t opcode)
+{
+	uint8_t value = bus_read8(cpu->regs.hl);
+	uint8_t bit0 = !!(value & 0x01);
+	value >>= 1;
+	value |= (cpu->regs.c_flag << 7);
+	bus_write8(cpu->regs.hl, value);
+
+	cpu->regs.z_flag = (value == 0);
+	cpu->regs.n_flag = 0;
+	cpu->regs.h_flag = 0;
+	cpu->regs.c_flag = bit0;
+
+	return 16;
+}
+
+static uint8_t sla_r8(uint8_t opcode)
+{
+	uint8_t *r8 = cpu_reg8(opcode & 0x07);
+	uint8_t bit7 = !!(*r8 & 0x80);
+	*r8 <<= 1;
+
+	cpu->regs.z_flag = (*r8 == 0);
+	cpu->regs.n_flag = 0;
+	cpu->regs.h_flag = 0;
+	cpu->regs.c_flag = bit7;
+
+	return 8;
+}
+
+static uint8_t sla_hl(uint8_t opcode)
+{
+	uint8_t value = bus_read8(cpu->regs.hl);
+	uint8_t bit7 = !!(value & 0x80);
+	value <<= 1;
+	bus_write8(cpu->regs.hl, value);
+
+	cpu->regs.z_flag = (value == 0);
+	cpu->regs.n_flag = 0;
+	cpu->regs.h_flag = 0;
+	cpu->regs.c_flag = bit7;
+
+	return 16;
+}
+
+static uint8_t sra_r8(uint8_t opcode)
+{
+	uint8_t *r8 = cpu_reg8(opcode & 0x07);
+	uint8_t bit0 = !!(*r8 & 0x01);
+	uint8_t bit7 = !!(*r8 & 0x80);
+	*r8 >>= 1;
+	*r8 |= (bit7 << 7);
+
+	cpu->regs.z_flag = (*r8 == 0);
+	cpu->regs.n_flag = 0;
+	cpu->regs.h_flag = 0;
+	cpu->regs.c_flag = bit0;
+
+	return 8;
+}
+
+static uint8_t sra_hl(uint8_t opcode)
+{
+	uint8_t value = bus_read8(cpu->regs.hl);
+	uint8_t bit0 = !!(value & 0x01);
+	uint8_t bit7 = !!(value & 0x80);
+	value >>= 1;
+	value |= (bit7 << 7);
+	bus_write8(cpu->regs.hl, value);
+
+	cpu->regs.z_flag = (value == 0);
+	cpu->regs.n_flag = 0;
+	cpu->regs.h_flag = 0;
+	cpu->regs.c_flag = bit0;
+
+	return 16;
+}
+
+static uint8_t swap_r8(uint8_t opcode)
+{
+	uint8_t *r8 = cpu_reg8(opcode & 0x07);
+	*r8 = (*r8 << 4) | (*r8 >> 4);
+
+	cpu->regs.z_flag = (*r8 == 0);
+	cpu->regs.n_flag = 0;
+	cpu->regs.h_flag = 0;
+	cpu->regs.c_flag = 0;
+
+	return 8;
+}
+
+static uint8_t swap_hl(uint8_t opcode)
+{
+	uint8_t value = bus_read8(cpu->regs.hl);
+	value = (value << 4) | (value >> 4);
+	bus_write8(cpu->regs.hl, value);
+
+	cpu->regs.z_flag = (value == 0);
+	cpu->regs.n_flag = 0;
+	cpu->regs.h_flag = 0;
+	cpu->regs.c_flag = 0;
+
+	return 16;
+}
+
+static uint8_t srl_r8(uint8_t opcode)
+{
+	uint8_t *r8 = cpu_reg8(opcode & 0x07);
+	uint8_t bit0 = !!(*r8 & 0x01);
+	*r8 >>= 1;
+
+	cpu->regs.z_flag = (*r8 == 0);
+	cpu->regs.n_flag = 0;
+	cpu->regs.h_flag = 0;
+	cpu->regs.c_flag = bit0;
+
+	return 8;
+}
+
+static uint8_t srl_hl(uint8_t opcode)
+{
+	uint8_t value = bus_read8(cpu->regs.hl);
+	uint8_t bit0 = !!(value & 0x01);
+	value >>= 1;
+	bus_write8(cpu->regs.hl, value);
+
+	cpu->regs.z_flag = (value == 0);
+	cpu->regs.n_flag = 0;
+	cpu->regs.h_flag = 0;
+	cpu->regs.c_flag = bit0;
+
+	return 16;
+}
+
+static uint8_t bit_r8(uint8_t opcode)
+{
+	uint8_t *r8 = cpu_reg8(opcode & 0x07);
+	uint8_t bit = (opcode >> 3) & 0x07;
+	bit = !!(*r8 & (1 << bit));
+
+	cpu->regs.z_flag = (bit == 0);
+	cpu->regs.n_flag = 0;
+	cpu->regs.h_flag = 1;
+
+	return 8;
+}
+
+static uint8_t bit_hl(uint8_t opcode)
+{
+	uint8_t value = bus_read8(cpu->regs.hl);
+	uint8_t bit = (opcode >> 3) & 0x07;
+	bit = !!(value & (1 << bit));
+
+	cpu->regs.z_flag = (bit == 0);
+	cpu->regs.n_flag = 0;
+	cpu->regs.h_flag = 1;
+
+	return 12;
+}
+
+static uint8_t res_r8(uint8_t opcode)
+{
+	uint8_t *r8 = cpu_reg8(opcode & 0x07);
+	uint8_t bit = (opcode >> 3) & 0x07;
+	*r8 &= ~(1 << bit);
+
+	return 8;
+}
+
+static uint8_t res_hl(uint8_t opcode)
+{
+	uint8_t value = bus_read8(cpu->regs.hl);
+	uint8_t bit = (opcode >> 3) & 0x07;
+	value &= ~(1 << bit);
+	bus_write8(cpu->regs.hl, value);
+
+	return 16;
+}
+
+static uint8_t set_r8(uint8_t opcode)
+{
+	uint8_t *r8 = cpu_reg8(opcode & 0x07);
+	uint8_t bit = (opcode >> 3) & 0x07;
+	*r8 |= (1 << bit);
+
+	return 8;
+}
+
+static uint8_t set_hl(uint8_t opcode)
+{
+	uint8_t value = bus_read8(cpu->regs.hl);
+	uint8_t bit = (opcode >> 3) & 0x07;
+	value |= (1 << bit);
+	bus_write8(cpu->regs.hl, value);
+
+	return 16;
+}
+
 static const opcode_handler cb_opcode_handlers[256] = {};
 
 static uint8_t cb_prefix(uint8_t opcode)
