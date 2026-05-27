@@ -1006,10 +1006,63 @@ static uint8_t nop(uint8_t opcode)
 }
 
 /**
- * TODO:
- * Fill opcode_handlers table
+ * Accumulator bit rotation instructions.
  */
+static uint8_t rlca(uint8_t opcode)
+{
+	uint8_t bit7 = !!(cpu->regs.a & 0x80);
+	cpu->regs.a <<= 1;
+	cpu->regs.a |= bit7;
+
+	cpu->regs.z_flag = 0;
+	cpu->regs.n_flag = 0;
+	cpu->regs.h_flag = 0;
+	cpu->regs.c_flag = bit7;
+	return 4;
+}
+
+static uint8_t rrca(uint8_t opcode)
+{
+	uint8_t bit0 = !!(cpu->regs.a & 0x01);
+	cpu->regs.a >>= 1;
+	cpu->regs.a |= (bit0 << 7);
+
+	cpu->regs.z_flag = 0;
+	cpu->regs.n_flag = 0;
+	cpu->regs.h_flag = 0;
+	cpu->regs.c_flag = bit0;
+	return 4;
+}
+
+static uint8_t rla(uint8_t opcode)
+{
+	uint8_t bit7 = !!(cpu->regs.a & 0x80);
+	cpu->regs.a <<= 1;
+	cpu->regs.a |= cpu->regs.c_flag;
+
+	cpu->regs.z_flag = 0;
+	cpu->regs.n_flag = 0;
+	cpu->regs.h_flag = 0;
+	cpu->regs.c_flag = bit7;
+	return 4;
+}
+
+static uint8_t rra(uint8_t opcode)
+{
+	uint8_t bit0 = !!(cpu->regs.a & 0x01);
+	cpu->regs.a >>= 1;
+	cpu->regs.a |= (cpu->regs.c_flag << 7);
+
+	cpu->regs.z_flag = 0;
+	cpu->regs.n_flag = 0;
+	cpu->regs.h_flag = 0;
+	cpu->regs.c_flag = bit0;
+	return 4;
+}
+
+static uint8_t cb_prefix(uint8_t opcode);
 typedef uint8_t (*opcode_handler)(uint8_t);
+
 static const opcode_handler opcode_handlers[256] = {
 	/*0x0_*/
 	[0x00] = nop,
@@ -1019,6 +1072,7 @@ static const opcode_handler opcode_handlers[256] = {
 	[0x04] = inc_r8,
 	[0x05] = dec_r8,
 	[0x06] = ld_r8_n8,
+	[0x07] = rlca,
 	[0x08] = ld_n16_sp,
 	[0x09] = add_hl_r16,
 	[0x0A] = ld_a_r16,
@@ -1026,6 +1080,7 @@ static const opcode_handler opcode_handlers[256] = {
 	[0x0C] = inc_r8,
 	[0x0D] = dec_r8,
 	[0x0E] = ld_r8_n8,
+	[0x0F] = rrca,
 
 	/*0x1_*/
 	[0x10] = stop,
@@ -1035,6 +1090,7 @@ static const opcode_handler opcode_handlers[256] = {
 	[0x14] = inc_r8,
 	[0x15] = dec_r8,
 	[0x16] = ld_r8_n8,
+	[0x17] = rla,
 	[0x18] = jr_e8,
 	[0x19] = add_hl_r16,
 	[0x1A] = ld_a_r16,
@@ -1042,6 +1098,7 @@ static const opcode_handler opcode_handlers[256] = {
 	[0x1C] = inc_r8,
 	[0x1D] = dec_r8,
 	[0x1E] = ld_r8_n8,
+	[0x1F] = rra,
 
 	/*0x2_*/
 	[0x20] = jr_cc_e8,
@@ -1152,6 +1209,7 @@ static const opcode_handler opcode_handlers[256] = {
 	[0xC8] = ret_cc,
 	[0xC9] = ret,
 	[0xCA] = jp_cc_n16,
+	[0xCB] = cb_prefix,
 	[0xCC] = call_cc_n16,
 	[0xCD] = call_n16,
 	[0xCE] = adc_a_n8,
@@ -1207,3 +1265,11 @@ static const opcode_handler opcode_handlers[256] = {
 	[0xFE] = cp_a_n8,
 	[0xFF] = rst,
 };
+
+static const opcode_handler cb_opcode_handlers[256] = {};
+
+static uint8_t cb_prefix(uint8_t opcode)
+{
+	opcode = bus_read8(cpu->regs.pc++);
+	return cb_opcode_handlers[opcode](opcode);
+}
