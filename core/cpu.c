@@ -305,44 +305,43 @@ static uint8_t ld_hl_sp_e8(uint8_t opcode)
 
 	cpu->regs.z_flag = 0;
 	cpu->regs.n_flag = 0;
-	uint16_t carry_bit = (cpu->regs.sp & e8) |
-			     ((cpu->regs.sp ^ e8) & ~result);
-	cpu->regs.c_flag = !!(carry_bit & 0x80);
-	cpu->regs.h_flag = !!(carry_bit & 0x08);
+	uint16_t carry = (cpu->regs.sp & e8) | ((cpu->regs.sp ^ e8) & ~result);
+	cpu->regs.h_flag = !!(carry & 0x08);
+	cpu->regs.c_flag = !!(carry & 0x80);
 	return 12;
 }
 
 /**
  * 8-bit arithmetic and logical instructions.
  */
-static uint8_t carry_bits(uint8_t a, uint8_t b)
+static uint8_t add_carry(uint8_t a, uint8_t b)
 {
 	uint8_t s = a + b;
 	return (a & b) | ((a ^ b) & ~s);
 }
 
-static uint8_t carry_bits3(uint8_t a, uint8_t b, uint8_t c)
+static uint8_t add_carry3(uint8_t a, uint8_t b, uint8_t c)
 {
-	uint8_t carries1 = carry_bits(a, b);
-	uint8_t carries2 = carry_bits(a + b, c);
-	return carries1 | carries2;
+	uint8_t c1 = add_carry(a, b);
+	uint8_t c2 = add_carry(a + b, c);
+	return c1 | c2;
 }
 
-static void add_sync_flags(uint8_t carries)
+static void add_sync_flags(uint8_t carry)
 {
 	cpu->regs.z_flag = (cpu->regs.a == 0);
 	cpu->regs.n_flag = 0;
-	cpu->regs.h_flag = !!(carries & 0x08);
-	cpu->regs.c_flag = !!(carries & 0x80);
+	cpu->regs.h_flag = !!(carry & 0x08);
+	cpu->regs.c_flag = !!(carry & 0x80);
 }
 
 static uint8_t add_a_r8(uint8_t opcode)
 {
 	uint8_t *rs = cpu_reg8(opcode & 0x07);
-	uint8_t carries = carry_bits(cpu->regs.a, *rs);
+	uint8_t carry = add_carry(cpu->regs.a, *rs);
 
 	cpu->regs.a += *rs;
-	add_sync_flags(carries);
+	add_sync_flags(carry);
 
 	return 4;
 }
@@ -350,10 +349,10 @@ static uint8_t add_a_r8(uint8_t opcode)
 static uint8_t add_a_hl(uint8_t opcode)
 {
 	uint8_t value = bus_read8(cpu->regs.hl);
-	uint8_t carries = carry_bits(cpu->regs.a, value);
+	uint8_t carry = add_carry(cpu->regs.a, value);
 
 	cpu->regs.a += value;
-	add_sync_flags(carries);
+	add_sync_flags(carry);
 
 	return 8;
 }
@@ -361,10 +360,10 @@ static uint8_t add_a_hl(uint8_t opcode)
 static uint8_t add_a_n8(uint8_t opcode)
 {
 	uint8_t n8 = bus_read8(cpu->regs.pc++);
-	uint8_t carries = carry_bits(cpu->regs.a, n8);
+	uint8_t carry = add_carry(cpu->regs.a, n8);
 
 	cpu->regs.a += n8;
-	add_sync_flags(carries);
+	add_sync_flags(carry);
 
 	return 8;
 }
@@ -372,10 +371,10 @@ static uint8_t add_a_n8(uint8_t opcode)
 static uint8_t adc_a_r8(uint8_t opcode)
 {
 	uint8_t *rs = cpu_reg8(opcode & 0x07);
-	uint8_t carries = carry_bits3(cpu->regs.a, *rs, cpu->regs.c_flag);
+	uint8_t carry = add_carry3(cpu->regs.a, *rs, cpu->regs.c_flag);
 
 	cpu->regs.a = cpu->regs.a + *rs + cpu->regs.c_flag;
-	add_sync_flags(carries);
+	add_sync_flags(carry);
 
 	return 4;
 }
@@ -383,10 +382,10 @@ static uint8_t adc_a_r8(uint8_t opcode)
 static uint8_t adc_a_hl(uint8_t opcode)
 {
 	uint8_t value = bus_read8(cpu->regs.hl);
-	uint8_t carries = carry_bits3(cpu->regs.a, value, cpu->regs.c_flag);
+	uint8_t carry = add_carry3(cpu->regs.a, value, cpu->regs.c_flag);
 
 	cpu->regs.a = cpu->regs.a + value + cpu->regs.c_flag;
-	add_sync_flags(carries);
+	add_sync_flags(carry);
 
 	return 8;
 }
@@ -394,15 +393,15 @@ static uint8_t adc_a_hl(uint8_t opcode)
 static uint8_t adc_a_n8(uint8_t opcode)
 {
 	uint8_t n8 = bus_read8(cpu->regs.pc++);
-	uint8_t carries = carry_bits3(cpu->regs.a, n8, cpu->regs.c_flag);
+	uint8_t carry = add_carry3(cpu->regs.a, n8, cpu->regs.c_flag);
 
 	cpu->regs.a = cpu->regs.a + n8 + cpu->regs.c_flag;
-	add_sync_flags(carries);
+	add_sync_flags(carry);
 
 	return 8;
 }
 
-static uint8_t sub_carry_bits(uint8_t a, uint8_t b)
+static uint8_t sub_carry(uint8_t a, uint8_t b)
 {
 	uint8_t result = 0;
 	if (a < b) {
@@ -414,162 +413,162 @@ static uint8_t sub_carry_bits(uint8_t a, uint8_t b)
 	return result;
 }
 
-static uint8_t sub_carry_bits3(uint8_t a, uint8_t b, uint8_t c)
+static uint8_t sub_carry3(uint8_t a, uint8_t b, uint8_t c)
 {
-	uint8_t c1 = sub_carry_bits(a, b);
-	uint8_t c2 = sub_carry_bits(a - b, c);
+	uint8_t c1 = sub_carry(a, b);
+	uint8_t c2 = sub_carry(a - b, c);
 	return c1 | c2;
 }
 
-static void sub_sync_flags(uint8_t carries)
+static void sub_sync_flags(uint8_t carry)
 {
 	cpu->regs.z_flag = (cpu->regs.a == 0);
 	cpu->regs.n_flag = 1;
-	cpu->regs.h_flag = !!(carries & 0x08);
-	cpu->regs.c_flag = !!(carries & 0x80);
+	cpu->regs.h_flag = !!(carry & 0x08);
+	cpu->regs.c_flag = !!(carry & 0x80);
 }
 
 static uint8_t sub_a_r8(uint8_t opcode)
 {
 	uint8_t *r8 = cpu_reg8(opcode & 0x7);
-	uint8_t carries = sub_carry_bits(cpu->regs.a, *r8);
+	uint8_t carry = sub_carry(cpu->regs.a, *r8);
 
 	cpu->regs.a -= *r8;
-	sub_sync_flags(carries);
+	sub_sync_flags(carry);
 	return 4;
 }
 
 static uint8_t sub_a_hl(uint8_t opcode)
 {
 	uint8_t value = bus_read8(cpu->regs.hl);
-	uint8_t carries = sub_carry_bits(cpu->regs.a, value);
+	uint8_t carry = sub_carry(cpu->regs.a, value);
 
 	cpu->regs.a -= value;
-	sub_sync_flags(carries);
+	sub_sync_flags(carry);
 	return 8;
 }
 
 static uint8_t sub_a_n8(uint8_t opcode)
 {
 	uint8_t n8 = bus_read8(cpu->regs.pc++);
-	uint8_t carries = sub_carry_bits(cpu->regs.a, n8);
+	uint8_t carry = sub_carry(cpu->regs.a, n8);
 
 	cpu->regs.a -= n8;
-	sub_sync_flags(carries);
+	sub_sync_flags(carry);
 	return 8;
 }
 
 static uint8_t sbc_a_r8(uint8_t opcode)
 {
 	uint8_t *r8 = cpu_reg8(opcode & 0x07);
-	uint8_t carries = sub_carry_bits3(cpu->regs.a, *r8, cpu->regs.c_flag);
+	uint8_t carry = sub_carry3(cpu->regs.a, *r8, cpu->regs.c_flag);
 
 	cpu->regs.a = cpu->regs.a - *r8 - cpu->regs.c_flag;
-	sub_sync_flags(carries);
+	sub_sync_flags(carry);
 	return 4;
 }
 
 static uint8_t sbc_a_hl(uint8_t opcode)
 {
 	uint8_t value = bus_read8(cpu->regs.hl);
-	uint8_t carries = sub_carry_bits3(cpu->regs.a, value, cpu->regs.c_flag);
+	uint8_t carry = sub_carry3(cpu->regs.a, value, cpu->regs.c_flag);
 
 	cpu->regs.a = cpu->regs.a - value - cpu->regs.c_flag;
-	sub_sync_flags(carries);
+	sub_sync_flags(carry);
 	return 8;
 }
 
 static uint8_t sbc_a_n8(uint8_t opcode)
 {
 	uint8_t n8 = bus_read8(cpu->regs.pc++);
-	uint8_t carries = sub_carry_bits3(cpu->regs.a, n8, cpu->regs.c_flag);
+	uint8_t carry = sub_carry3(cpu->regs.a, n8, cpu->regs.c_flag);
 
 	cpu->regs.a = cpu->regs.a - n8 - cpu->regs.c_flag;
-	sub_sync_flags(carries);
+	sub_sync_flags(carry);
 	return 8;
 }
 
-static void cp_sync_flags(uint8_t result, uint8_t carries)
+static void cp_sync_flags(uint8_t result, uint8_t carry)
 {
 	cpu->regs.z_flag = (result == 0);
 	cpu->regs.n_flag = 1;
-	cpu->regs.h_flag = !!(carries & 0x08);
-	cpu->regs.c_flag = !!(carries & 0x80);
+	cpu->regs.h_flag = !!(carry & 0x08);
+	cpu->regs.c_flag = !!(carry & 0x80);
 }
 
 static uint8_t cp_a_r8(uint8_t opcode)
 {
 	uint8_t *r8 = cpu_reg8(opcode & 0x07);
-	uint8_t carries = sub_carry_bits(cpu->regs.a, *r8);
-	cp_sync_flags(cpu->regs.a - *r8, carries);
+	uint8_t carry = sub_carry(cpu->regs.a, *r8);
+	cp_sync_flags(cpu->regs.a - *r8, carry);
 	return 4;
 }
 
 static uint8_t cp_a_hl(uint8_t opcode)
 {
 	uint8_t value = bus_read8(cpu->regs.hl);
-	uint8_t carries = sub_carry_bits(cpu->regs.a, value);
-	cp_sync_flags(cpu->regs.a - value, carries);
+	uint8_t carry = sub_carry(cpu->regs.a, value);
+	cp_sync_flags(cpu->regs.a - value, carry);
 	return 8;
 }
 
 static uint8_t cp_a_n8(uint8_t opcode)
 {
 	uint8_t n8 = bus_read8(cpu->regs.pc++);
-	uint8_t carries = sub_carry_bits(cpu->regs.a, n8);
-	cp_sync_flags(cpu->regs.a - n8, carries);
+	uint8_t carry = sub_carry(cpu->regs.a, n8);
+	cp_sync_flags(cpu->regs.a - n8, carry);
 	return 8;
 }
 
-static void inc_sync_flags(uint8_t result, uint8_t carries)
+static void inc_sync_flags(uint8_t result, uint8_t carry)
 {
 	cpu->regs.z_flag = (result == 0);
 	cpu->regs.n_flag = 0;
-	cpu->regs.h_flag = !!(carries & 0x08);
+	cpu->regs.h_flag = !!(carry & 0x08);
 }
 
 static uint8_t inc_r8(uint8_t opcode)
 {
 	uint8_t *rd = cpu_reg8((opcode >> 3) & 0x07);
-	uint8_t carries = carry_bits(*rd, 1);
+	uint8_t carry = add_carry(*rd, 1);
 	*rd += 1;
-	inc_sync_flags(*rd, carries);
+	inc_sync_flags(*rd, carry);
 	return 4;
 }
 
-static uint8_t inc_hl(uint8_t opcode)
+static uint8_t inc_at_hl(uint8_t opcode)
 {
 	uint8_t value = bus_read8(cpu->regs.hl);
-	uint8_t carries = carry_bits(value, 1);
+	uint8_t carry = add_carry(value, 1);
 	value += 1;
 	bus_write8(cpu->regs.hl, value);
-	inc_sync_flags(value, carries);
+	inc_sync_flags(value, carry);
 	return 12;
 }
 
-static void dec_sync_flags(uint8_t result, uint8_t carries)
+static void dec_sync_flags(uint8_t result, uint8_t carry)
 {
 	cpu->regs.z_flag = (result == 0);
 	cpu->regs.n_flag = 1;
-	cpu->regs.h_flag = !!(carries & 0x08);
+	cpu->regs.h_flag = !!(carry & 0x08);
 }
 
 static uint8_t dec_r8(uint8_t opcode)
 {
 	uint8_t *rd = cpu_reg8((opcode >> 3) & 0x07);
-	uint8_t carries = sub_carry_bits(*rd, 1);
+	uint8_t carry = sub_carry(*rd, 1);
 	*rd -= 1;
-	dec_sync_flags(*rd, carries);
+	dec_sync_flags(*rd, carry);
 	return 4;
 }
 
-static uint8_t dec_hl(uint8_t opcode)
+static uint8_t dec_at_hl(uint8_t opcode)
 {
 	uint8_t value = bus_read8(cpu->regs.hl);
-	uint8_t carries = sub_carry_bits(value, 1);
+	uint8_t carry = sub_carry(value, 1);
 	value -= 1;
 	bus_write8(cpu->regs.hl, value);
-	dec_sync_flags(value, carries);
+	dec_sync_flags(value, carry);
 	return 12;
 }
 
@@ -717,6 +716,47 @@ static uint8_t cpl(uint8_t opcode)
  * TODO:
  * 16-bit arithmetic instructions.
  */
+static uint8_t inc_r16(uint8_t opcode)
+{
+	uint16_t *r16 = cpu_reg16((opcode >> 4) & 0x03, 1);
+	*r16 += 1;
+	return 8;
+}
+
+static uint8_t dec_r16(uint8_t opcode)
+{
+	uint16_t *r16 = cpu_reg16((opcode >> 4) & 0x03, 1);
+	*r16 -= 1;
+	return 8;
+}
+
+static uint8_t add_hl_r16(uint8_t opcode)
+{
+	uint16_t *r16 = cpu_reg16((opcode >> 4) & 0x03, 1);
+	uint16_t result = cpu->regs.hl + *r16;
+	uint16_t carry = (cpu->regs.hl & *r16) |
+			 ((cpu->regs.hl ^ *r16) & ~result);
+
+	cpu->regs.hl = result;
+	cpu->regs.n_flag = 0;
+	cpu->regs.h_flag = !!(carry & 0x0800);
+	cpu->regs.c_flag = !!(carry & 0x8000);
+	return 8;
+}
+
+static uint8_t add_sp_e8(uint8_t opcode)
+{
+	int8_t e8 = bus_read8(cpu->regs.pc++);
+	uint16_t result = cpu->regs.sp + e8;
+	uint16_t carry = (cpu->regs.sp & e8) | ((cpu->regs.sp ^ e8) & ~result);
+
+	cpu->regs.sp = result;
+	cpu->regs.z_flag = 0;
+	cpu->regs.n_flag = 0;
+	cpu->regs.h_flag = !!(carry & 0x08);
+	cpu->regs.c_flag = !!(carry & 0x80);
+	return 16;
+}
 
 /**
  * Control flow instructions.
@@ -975,11 +1015,14 @@ static const opcode_handler opcode_handlers[256] = {
 	[0x00] = nop,
 	[0x01] = ld_r16_n16,
 	[0x02] = ld_r16_a,
+	[0x03] = inc_r16,
 	[0x04] = inc_r8,
 	[0x05] = dec_r8,
 	[0x06] = ld_r8_n8,
 	[0x08] = ld_n16_sp,
+	[0x09] = add_hl_r16,
 	[0x0A] = ld_a_r16,
+	[0x0B] = dec_r16,
 	[0x0C] = inc_r8,
 	[0x0D] = dec_r8,
 	[0x0E] = ld_r8_n8,
@@ -988,11 +1031,14 @@ static const opcode_handler opcode_handlers[256] = {
 	[0x10] = stop,
 	[0x11] = ld_r16_n16,
 	[0x12] = ld_r16_a,
+	[0x13] = inc_r16,
 	[0x14] = inc_r8,
 	[0x15] = dec_r8,
 	[0x16] = ld_r8_n8,
 	[0x18] = jr_e8,
+	[0x19] = add_hl_r16,
 	[0x1A] = ld_a_r16,
+	[0x1B] = dec_r16,
 	[0x1C] = inc_r8,
 	[0x1D] = dec_r8,
 	[0x1E] = ld_r8_n8,
@@ -1001,12 +1047,15 @@ static const opcode_handler opcode_handlers[256] = {
 	[0x20] = jr_cc_e8,
 	[0x21] = ld_r16_n16,
 	[0x22] = ldi_hl_a,
+	[0x23] = inc_r16,
 	[0x24] = inc_r8,
 	[0x25] = dec_r8,
 	[0x26] = ld_r8_n8,
 	[0x27] = daa,
 	[0x28] = jr_cc_e8,
+	[0x29] = add_hl_r16,
 	[0x2A] = ldi_a_hl,
+	[0x2B] = dec_r16,
 	[0x2C] = inc_r8,
 	[0x2D] = dec_r8,
 	[0x2E] = ld_r8_n8,
@@ -1016,12 +1065,15 @@ static const opcode_handler opcode_handlers[256] = {
 	[0x30] = jr_cc_e8,
 	[0x31] = ld_r16_n16,
 	[0x32] = ldd_hl_a,
-	[0x34] = inc_hl,
-	[0x35] = dec_hl,
+	[0x33] = inc_r16,
+	[0x34] = inc_at_hl,
+	[0x35] = dec_at_hl,
 	[0x36] = ld_hl_n8,
 	[0x37] = scf,
 	[0x38] = jr_cc_e8,
+	[0x39] = add_hl_r16,
 	[0x3A] = ldd_a_hl,
+	[0x3B] = dec_r16,
 	[0x3C] = inc_r8,
 	[0x3D] = dec_r8,
 	[0x3E] = ld_r8_n8,
@@ -1131,6 +1183,7 @@ static const opcode_handler opcode_handlers[256] = {
 	[0xE5] = push_r16,
 	[0xE6] = and_a_n8,
 	[0xE7] = rst,
+	[0xE8] = add_sp_e8,
 	[0xE9] = jp_hl,
 	[0xEA] = ld_n16_a,
 	[0xEB ... 0xED] = ill_op,

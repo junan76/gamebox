@@ -68,6 +68,10 @@ A cross platform gameboy emulator.
 - [x] cpl
 
 ### 16-bit arithmetic instructions
+- [x] inc r16
+- [x] dec r16
+- [x] add hl, r16
+- [x] add sp, e8
 
 ### Control flow instructions
 - [x] jp n16
