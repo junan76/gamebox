@@ -1575,10 +1575,170 @@ static uint8_t set_hl(uint8_t opcode)
 	return 16;
 }
 
-static const opcode_handler cb_opcode_handlers[256] = {};
+static const opcode_handler cb_opcode_handlers[256] = {
+	/*0x0_*/
+	[0x00 ... 0x05] = rlc_r8,
+	[0x06] = rlc_hl,
+	[0x07] = rlc_r8,
+	[0x08 ... 0x0D] = rrc_r8,
+	[0x0E] = rrc_hl,
+	[0x0F] = rrc_r8,
+	/*0x1_*/
+	[0x10 ... 0x15] = rl_r8,
+	[0x16] = rl_hl,
+	[0x17] = rl_r8,
+	[0x18 ... 0x1D] = rr_r8,
+	[0x1E] = rr_hl,
+	[0x1F] = rr_r8,
+	/*0x2_*/
+	[0x20 ... 0x25] = sla_r8,
+	[0x26] = sla_hl,
+	[0x27] = sla_r8,
+	[0x28 ... 0x2D] = sra_r8,
+	[0x2E] = sra_hl,
+	[0x2F] = sra_r8,
+	/*0x3_*/
+	[0x30 ... 0x35] = swap_r8,
+	[0x36] = swap_hl,
+	[0x37] = swap_r8,
+	[0x38 ... 0x3D] = srl_r8,
+	[0x3E] = srl_hl,
+	[0x3F] = srl_r8,
+	/*0x4_*/
+	[0x40 ... 0x45] = bit_r8,
+	[0x46] = bit_hl,
+	[0x47 ... 0x4D] = bit_r8,
+	[0x4E] = bit_hl,
+	[0x4F] = bit_r8,
+	/*0x5_*/
+	[0x50 ... 0x55] = bit_r8,
+	[0x56] = bit_hl,
+	[0x57 ... 0x5D] = bit_r8,
+	[0x5E] = bit_hl,
+	[0x5F] = bit_r8,
+	/*0x6_*/
+	[0x60 ... 0x65] = bit_r8,
+	[0x66] = bit_hl,
+	[0x67 ... 0x6D] = bit_r8,
+	[0x6E] = bit_hl,
+	[0x6F] = bit_r8,
+	/*0x7_*/
+	[0x70 ... 0x75] = bit_r8,
+	[0x76] = bit_hl,
+	[0x77 ... 0x7D] = bit_r8,
+	[0x7E] = bit_hl,
+	[0x7F] = bit_r8,
+	/*0x8_*/
+	[0x80 ... 0x85] = res_r8,
+	[0x86] = res_hl,
+	[0x87 ... 0x8D] = res_r8,
+	[0x8E] = res_hl,
+	[0x8F] = res_r8,
+	/*0x9_*/
+	[0x90 ... 0x95] = res_r8,
+	[0x96] = res_hl,
+	[0x97 ... 0x9D] = res_r8,
+	[0x9E] = res_hl,
+	[0x9F] = res_r8,
+	/*0xA_*/
+	[0xA0 ... 0xA5] = res_r8,
+	[0xA6] = res_hl,
+	[0xA7 ... 0xAD] = res_r8,
+	[0xAE] = res_hl,
+	[0xAF] = res_r8,
+	/*0xB_*/
+	[0xB0 ... 0xB5] = res_r8,
+	[0xB6] = res_hl,
+	[0xB7 ... 0xBD] = res_r8,
+	[0xBE] = res_hl,
+	[0xBF] = res_r8,
+	/*0xC_*/
+	[0xC0 ... 0xC5] = set_r8,
+	[0xC6] = set_hl,
+	[0xC7 ... 0xCD] = set_r8,
+	[0xCE] = set_hl,
+	[0xCF] = set_r8,
+	/*0xD_*/
+	[0xD0 ... 0xD5] = set_r8,
+	[0xD6] = set_hl,
+	[0xD7 ... 0xDD] = set_r8,
+	[0xDE] = set_hl,
+	[0xDF] = set_r8,
+	/*0xE_*/
+	[0xE0 ... 0xE5] = set_r8,
+	[0xE6] = set_hl,
+	[0xE7 ... 0xED] = set_r8,
+	[0xEE] = set_hl,
+	[0xEF] = set_r8,
+	/*0xF_*/
+	[0xF0 ... 0xF5] = set_r8,
+	[0xF6] = set_hl,
+	[0xF7 ... 0xFD] = set_r8,
+	[0xFE] = set_hl,
+	[0xFF] = set_r8,
+};
 
 static uint8_t cb_prefix(uint8_t opcode)
 {
 	opcode = bus_read8(cpu->regs.pc++);
 	return cb_opcode_handlers[opcode](opcode);
+}
+
+uint8_t cpu_step(void)
+{
+	if (cpu->stopped) {
+		return 0;
+	}
+
+	static uint8_t irq_vectors[] = { 0x40, 0x48, 0x50, 0x58, 0x60 };
+	uint8_t irq_pending = cpu->ie & cpu->irq & 0x1F;
+	uint8_t irq = 0;
+
+	if (irq_pending) {
+		if (cpu->halted) {
+			cpu->halted = 0;
+		}
+
+		if (cpu->ime) {
+			while (irq < 5) {
+				if (irq_pending & (1 << irq)) {
+					cpu->irq &= ~(1 << irq);
+					cpu->ime = 0;
+					break;
+				}
+				irq++;
+			}
+
+			cpu->regs.sp -= 2;
+			bus_write16(cpu->regs.sp, cpu->regs.pc);
+			cpu->regs.pc = irq_vectors[irq];
+
+			return 20;
+		}
+	}
+
+	if (cpu->halted) {
+		return 4;
+	}
+
+	uint8_t opcode = bus_read8(cpu->regs.pc);
+	if (cpu->halt_bug) {
+		cpu->halt_bug = 0;
+	} else {
+		cpu->regs.pc++;
+	}
+
+	opcode_handler handler = opcode_handlers[opcode];
+	uint8_t result = handler(opcode);
+
+	/**
+	 * TODO:
+	 * "ei;halt" instruction sequence.
+	 */
+	if (cpu->ime_pending && opcode != 0xFB) {
+		cpu->ime_pending = 0;
+		cpu->ime = 1;
+	}
+
+	return result;
 }
