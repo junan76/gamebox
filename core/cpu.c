@@ -57,7 +57,7 @@ struct cpu_struct {
      */
 	uint8_t ie;
 	/**
-	 * Interrult requested flag, reg address 0xFF0F
+	 * Interrult requested flag, reg address: 0xFF0F
      * bits[7:5]: NONE
      * bit 4: joypad
      * bit 3: serial
@@ -713,7 +713,6 @@ static uint8_t cpl(uint8_t opcode)
 }
 
 /**
- * TODO:
  * 16-bit arithmetic instructions.
  */
 static uint8_t inc_r16(uint8_t opcode)
@@ -968,7 +967,8 @@ static uint8_t rst(uint8_t opcode)
  */
 static uint8_t halt(uint8_t opcode)
 {
-	if (cpu->ime == 0 && (cpu->ie & cpu->irq & 0x1F)) {
+	if (cpu->ime == 0 && cpu->ime_pending == 0 &&
+	    (cpu->ie & cpu->irq & 0x1F)) {
 		cpu->halt_bug = 1;
 	} else {
 		cpu->halted = 1;
@@ -992,10 +992,6 @@ static uint8_t di(uint8_t opcode)
 
 static uint8_t ei(uint8_t opcode)
 {
-	/**
-	 * TODO:
-	 * Enable ime after the next instruction when ime_pending is true.
-	 */
 	cpu->ime_pending = 1;
 	return 4;
 }
@@ -1731,14 +1727,30 @@ uint8_t cpu_step(void)
 	opcode_handler handler = opcode_handlers[opcode];
 	uint8_t result = handler(opcode);
 
-	/**
-	 * TODO:
-	 * "ei;halt" instruction sequence.
-	 */
 	if (cpu->ime_pending && opcode != 0xFB) {
 		cpu->ime_pending = 0;
 		cpu->ime = 1;
 	}
 
 	return result;
+}
+
+uint8_t cpu_ie_read()
+{
+	return cpu->ie;
+}
+
+void cpu_ie_write(uint8_t value)
+{
+	cpu->ie = value;
+}
+
+uint8_t cpu_irq_read()
+{
+	return cpu->irq;
+}
+
+void cpu_irq_write(uint8_t value)
+{
+	cpu->irq = (value & 0x1F);
 }
