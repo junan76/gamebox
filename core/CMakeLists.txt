@@ -1,1 +1,1 @@
-add_library(gb_core STATIC cpu.c bus.c)
+add_library(gb_core STATIC cpu.c bus.c device.c mbc.c)
