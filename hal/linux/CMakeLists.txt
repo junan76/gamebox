@@ -1,0 +1,1 @@
+add_library(gb_hal STATIC fs.c)

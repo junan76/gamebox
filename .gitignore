@@ -56,3 +56,6 @@ dkms.conf
 
 # Build outpts
 build/
+
+# VSCode
+.vscode

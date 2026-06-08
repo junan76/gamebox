@@ -1735,6 +1735,27 @@ uint8_t cpu_step(void)
 	return result;
 }
 
+void cpu_reset(void)
+{
+	cpu->regs.a = 0x01;
+	cpu->regs.z_flag = 1;
+	cpu->regs.n_flag = 0;
+	cpu->regs.h_flag = 0;
+	cpu->regs.c_flag = 0;
+
+	cpu->regs.b = 0x00;
+	cpu->regs.c = 0x13;
+
+	cpu->regs.d = 0x00;
+	cpu->regs.e = 0xD8;
+
+	cpu->regs.h = 0x01;
+	cpu->regs.l = 0x4D;
+
+	cpu->regs.pc = 0x0100;
+	cpu->regs.sp = 0xFFFE;
+}
+
 uint8_t cpu_ie_read()
 {
 	return cpu->ie;
