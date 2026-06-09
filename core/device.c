@@ -90,7 +90,7 @@ void timer_step(uint8_t ticks)
 	switch (timer.tac & 0x03) {
 	case 0:
 		increment = m_cycles / 256;
-		m_cycles % 256;
+		m_cycles %= 256;
 		break;
 	case 1:
 		increment = m_cycles / 4;

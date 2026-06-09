@@ -8,6 +8,7 @@ int main(int argc, char const *argv[])
     cpu_reset();
 	while (1) {
 		uint8_t ticks = cpu_step();
+		timer_step(ticks);
 	}
 	return 0;
 }

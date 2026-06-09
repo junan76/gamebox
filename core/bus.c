@@ -51,6 +51,8 @@ static void work_ram_write(uint16_t addr, uint8_t value)
 static uint8_t io_reg_read(uint16_t addr)
 {
 	if (addr == 0xFF00) {
+		/** TODO: joypad */
+		return 0;
 	} else if (addr == 0xFF01) {
 		return serial_buffer_read();
 	} else if (addr == 0xFF02) {
@@ -60,15 +62,21 @@ static uint8_t io_reg_read(uint16_t addr)
 	} else if (addr == 0xFF0F) {
 		return cpu_irq_read();
 	} else if (addr >= 0xFF10 && addr <= 0xFF26) {
+		/** TODO: audio */
 		return 0;
 	} else if (addr >= 0xFF30 && addr <= 0xFF3F) {
+		/** TODO: wave patterns */
 		return 0;
 	} else if (addr >= 0xFF40 && addr <= 0xFF4B) {
+		/** TODO: lcd control, status, position, scrolling and palletes */
 		return 0xFF;
 	} else if (addr == 0xFF46) {
+		/** TODO: OAM */
 		return 0xFF;
 	} else if (addr == 0xFF50) {
+		/** TODO: boot rom mapping control */
 	} else {
+		/** TODO: others */
 	}
 	return 0xFF;
 }
@@ -76,6 +84,7 @@ static uint8_t io_reg_read(uint16_t addr)
 static void io_reg_write(uint16_t addr, uint8_t value)
 {
 	if (addr == 0xFF00) {
+		/** TODO: joypad */
 	} else if (addr == 0xFF01) {
 		serial_buffer_write(value);
 	} else if (addr == 0xFF02) {
@@ -85,15 +94,17 @@ static void io_reg_write(uint16_t addr, uint8_t value)
 	} else if (addr == 0xFF0F) {
 		cpu_irq_write(value);
 	} else if (addr >= 0xFF10 && addr <= 0xFF26) {
-		/*Do nothing*/
+		/** TODO: audio*/
 	} else if (addr >= 0xFF30 && addr <= 0xFF3F) {
-		/*Do nothing*/
+		/** TODO: wave patterns */
 	} else if (addr >= 0xFF40 && addr <= 0xFF4B) {
-		/*Do nothing*/
+		/** TODO: lcd control, status, position, scrolling and palletes */
 	} else if (addr == 0xFF46) {
+		/** TODO: OAM */
 	} else if (addr == 0xFF50) {
 		mbc_mapping_control_write(value);
 	} else {
+		/** TODO: others */
 	}
 }
 
