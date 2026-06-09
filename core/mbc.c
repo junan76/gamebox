@@ -77,7 +77,11 @@ static uint8_t dmg_boot_rom[256] = {
 	0xf5, 0x06, 0x19, 0x78, 0x86, 0x23, 0x05, 0x20, 0xfb, 0x86, 0x20, 0xfe,
 	0x3e, 0x01, 0xe0, 0x50
 };
-static uint8_t boot_rom_unmapped;
+/**
+ * TODO: use boot rom and update cpu_reset implementation
+ * Boot rom unmapped by default for now
+ */
+static uint8_t boot_rom_unmapped = 1;
 
 void mbc_mapping_control_write(uint8_t value)
 {

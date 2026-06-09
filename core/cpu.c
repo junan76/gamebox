@@ -1,6 +1,7 @@
 #include <stdint.h>
 #include <stddef.h>
 #include "bus.h"
+#include "cpu.h"
 
 struct cpu_struct {
 	/**
@@ -1774,4 +1775,13 @@ uint8_t cpu_irq_read()
 void cpu_irq_write(uint8_t value)
 {
 	cpu->irq = (value & 0x1F);
+}
+
+void cpu_irq_raise(uint8_t irq)
+{
+	if (irq >= IRQ_MAX) {
+		return;
+	}
+
+	cpu->irq |= (1 << irq);
 }
