@@ -67,11 +67,11 @@ static uint8_t io_reg_read(uint16_t addr)
 	} else if (addr >= 0xFF30 && addr <= 0xFF3F) {
 		/** TODO: wave patterns */
 		return 0;
-	} else if (addr >= 0xFF40 && addr <= 0xFF4B) {
-		/** TODO: lcd control, status, position, scrolling and palletes */
-		return 0xFF;
 	} else if (addr == 0xFF46) {
 		/** TODO: OAM */
+		return 0xFF;
+	} else if (addr >= 0xFF40 && addr <= 0xFF4B) {
+		/** TODO: lcd control, status, position, scrolling and palletes */
 		return 0xFF;
 	} else if (addr == 0xFF50) {
 		/** TODO: boot rom mapping control */
@@ -97,10 +97,10 @@ static void io_reg_write(uint16_t addr, uint8_t value)
 		/** TODO: audio*/
 	} else if (addr >= 0xFF30 && addr <= 0xFF3F) {
 		/** TODO: wave patterns */
-	} else if (addr >= 0xFF40 && addr <= 0xFF4B) {
-		/** TODO: lcd control, status, position, scrolling and palletes */
 	} else if (addr == 0xFF46) {
 		/** TODO: OAM */
+	} else if (addr >= 0xFF40 && addr <= 0xFF4B) {
+		/** TODO: lcd control, status, position, scrolling and palletes */
 	} else if (addr == 0xFF50) {
 		mbc_mapping_control_write(value);
 	} else {

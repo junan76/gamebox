@@ -3,7 +3,7 @@
 #include <string.h>
 #include <stdint.h>
 
-#include <sys/errno.h>
+#include <errno.h>
 
 #define SZ_16KB 16384
 
@@ -11,7 +11,7 @@ void *hal_open(const char *rom_path)
 {
 	FILE *rd = fopen(rom_path, "rb");
 	if (rd == NULL) {
-		perror(strerror(errno));
+		perror("fopen");
 	}
 
 	return rd;
@@ -29,7 +29,7 @@ uint8_t hal_load(void *rd, uint8_t bank_id, uint8_t *bank)
 {
 	int rc = fseek((FILE *)rd, bank_id * SZ_16KB, SEEK_SET);
 	if (rc) {
-		perror(strerror(errno));
+		perror("fseek");
 		return rc;
 	}
 
