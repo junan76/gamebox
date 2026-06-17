@@ -5,7 +5,8 @@
 int main(int argc, char const *argv[])
 {
 	mbc_init(argv[1]);
-    cpu_reset();
+	joypad_reset();
+	cpu_reset();
 	while (1) {
 		uint8_t ticks = cpu_step();
 		timer_step(ticks);

@@ -1738,6 +1738,9 @@ uint8_t cpu_step(void)
 
 void cpu_reset(void)
 {
+	/**
+	 * TODO: reset interrupts and other things.
+	 */
 	cpu->regs.a = 0x01;
 	cpu->regs.z_flag = 1;
 	cpu->regs.n_flag = 0;

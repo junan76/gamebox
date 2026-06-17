@@ -51,8 +51,7 @@ static void work_ram_write(uint16_t addr, uint8_t value)
 static uint8_t io_reg_read(uint16_t addr)
 {
 	if (addr == 0xFF00) {
-		/** TODO: joypad */
-		return 0;
+		return joypad_read();
 	} else if (addr == 0xFF01) {
 		return serial_buffer_read();
 	} else if (addr == 0xFF02) {
@@ -84,7 +83,7 @@ static uint8_t io_reg_read(uint16_t addr)
 static void io_reg_write(uint16_t addr, uint8_t value)
 {
 	if (addr == 0xFF00) {
-		/** TODO: joypad */
+		joypad_write(value);
 	} else if (addr == 0xFF01) {
 		serial_buffer_write(value);
 	} else if (addr == 0xFF02) {

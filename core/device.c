@@ -2,9 +2,66 @@
 #include <stdio.h>
 
 #include "cpu.h"
+#include "device.h"
 
 /**
- * Serial device.
+ * Joypad device
+ */
+static struct {
+	/**
+	 * bit[5]: select buttons
+	 * bit[4]: select d-pads
+	 * NOTE: value of 0 means selected
+	 */
+	uint8_t select;
+	/**
+	 * bit[7:4]: buttons
+	 * bit[3:0]: d-pads
+	 */
+	uint8_t keys;
+} jp;
+
+void joypad_reset(void)
+{
+	/**
+	 * None of keys are selected or pressed
+	 */
+	jp.select = 0x30;
+	jp.keys = 0xFF;
+}
+
+uint8_t joypad_read(void)
+{
+	if (jp.select == 0x20) {
+		return 0xE0 | (jp.keys & 0x0F);
+	} else if (jp.select == 0x10) {
+		return 0xD0 | ((jp.keys >> 4) & 0x0F);
+	} else {
+		return 0xFF;
+	}
+}
+
+void joypad_write(uint8_t select)
+{
+	jp.select = select & 0x30;
+}
+
+void joypad_report_keys(uint8_t keys)
+{
+	/**
+	 * More than one keys can be reported at the same time,
+	 * NOTE:
+	 * 1) activa-low for a pressed key
+	 * 2) Generate joypad interrupt only at the time a key is pressed
+	 */
+	if (jp.keys & keys) {
+		cpu_irq_raise(IRQ_JOYPAD);
+	}
+	jp.keys = ~keys;
+}
+
+/**
+ * Serial device
  */
 static uint8_t sb;
 static uint8_t sc;
@@ -17,6 +74,7 @@ uint8_t serial_buffer_read(void)
 void serial_buffer_write(uint8_t value)
 {
 	sb = value;
+	/** TODO: printf for debug only, remove it later */
 	printf("%c", sb);
 }
 
@@ -31,7 +89,7 @@ void serial_control_write(uint8_t value)
 }
 
 /**
- * Timer device.
+ * Timer device
  */
 static struct {
 	uint16_t div;
