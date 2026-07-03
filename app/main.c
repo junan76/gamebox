@@ -4,12 +4,10 @@
 
 int main(int argc, char const *argv[])
 {
-	mbc_init(argv[1]);
-	joypad_reset();
-	cpu_reset();
+	uint8_t rc = 0;
+	rc = gb_init(argv[1]);
 	while (1) {
-		uint8_t ticks = cpu_step();
-		timer_step(ticks);
+		gb_step();
 	}
 	return 0;
 }

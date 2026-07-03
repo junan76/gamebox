@@ -25,7 +25,7 @@ void hal_close(void *rd)
 	fclose((FILE *)rd);
 }
 
-uint8_t hal_load(void *rd, uint8_t bank_id, uint8_t *bank)
+uint8_t hal_load(void *rd, uint8_t *buf, uint8_t bank_id)
 {
 	int rc = fseek((FILE *)rd, bank_id * SZ_16KB, SEEK_SET);
 	if (rc) {
@@ -33,10 +33,10 @@ uint8_t hal_load(void *rd, uint8_t bank_id, uint8_t *bank)
 		return rc;
 	}
 
-	if (fread(bank, 1, SZ_16KB, (FILE *)rd) != SZ_16KB) {
-        rc = ferror((FILE *)rd);
-        printf("fread fail: %d\n", rc);
-        return rc;
+	if (fread(buf, 1, SZ_16KB, (FILE *)rd) != SZ_16KB) {
+		rc = ferror((FILE *)rd);
+		printf("fread fail: %d\n", rc);
+		return rc;
 	}
 
 	return 0;

@@ -134,7 +134,7 @@ uint8_t mbc_init(const char *rom_path)
 		return -1;
 	}
 
-	int rc = hal_load(rom_desc, 0, rom_bank0);
+	int rc = hal_load(rom_desc, rom_bank0, 0);
 	if (rc) {
 		return -1;
 	}
@@ -145,7 +145,7 @@ uint8_t mbc_init(const char *rom_path)
 		return -1;
 	}
 
-	rc = hal_load(rom_desc, 1, rom_bank1);
+	rc = hal_load(rom_desc, rom_bank1, 1);
 	if (rc) {
 		return -1;
 	}

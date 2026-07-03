@@ -2,6 +2,49 @@
 
 A cross platform gameboy emulator.
 
+## The Design
+
+### Application layer
+
+### Core emulator layer
+
+1. cpu(DONE)
+2. ppu(DOING)
+3. apu(TODO)
+5. bus(DONE)
+6. devices
+   - joypad(DONE)
+   - serial(DONE)
+   - timer(DONE)
+7. mbc(DOING)
+
+
+### HAL layer
+
+1. fs
+   - hal_open
+   - hal_close
+   - hal_load
+2. input
+   - hal_input_poll
+3. graphics
+   - hal_draw_line
+4. audio
+   - hal_audio_play
+5. time
+   - hal_delay
+6. init/deinit
+   - hal_init
+   - hal_exit
+
+### Drivers layer
+
+### Ports layer
+
+### MCU specific SDK layer
+
+---
+
 ## CPU Instruction Set
 
 ### 8-bit load instructions

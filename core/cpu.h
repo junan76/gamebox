@@ -8,6 +8,7 @@
 #define IRQ_JOYPAD 4
 #define IRQ_MAX 5
 
+void cpu_reset(void);
 uint8_t cpu_step(void);
 
 /**

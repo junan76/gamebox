@@ -1,1 +1,1 @@
-add_library(gb_hal STATIC fs.c)
+add_library(gb_hal STATIC linux.c)
