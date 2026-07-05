@@ -46,12 +46,15 @@ void joypad_write(uint8_t select)
 	jp.select = select & 0x30;
 }
 
+/**
+ * @param keys, one bit per key, 1 means pressed
+ */
 void joypad_report_keys(uint8_t keys)
 {
 	/**
 	 * More than one keys can be reported at the same time,
 	 * NOTE:
-	 * 1) activa-low for a pressed key
+	 * 1) activa-low for a pressed key inside joypad
 	 * 2) Generate joypad interrupt only at the time a key is pressed
 	 */
 	if (jp.keys & keys) {

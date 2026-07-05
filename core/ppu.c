@@ -14,7 +14,7 @@ static struct {
 #define LCDC_OBJ_SIZE 4
 #define LCDC_OBJ_ENABLE 2
 #define LCDC_BG_WIN_DISPLAY 1
-	/** Reg addr: 0x40 */
+	/** Reg addr: 0x0xFF40 */
 	uint8_t lcdc;
 
 #define STAT_LYC_INT 64
@@ -23,28 +23,28 @@ static struct {
 #define STAT_MODE0_INT 8
 #define STAT_LYC_EQS_LY 4
 #define STAT_PPU_MODE 3
-	/** Reg addr: 0x41 */
+	/** Reg addr: 0x0xFF41 */
 	uint8_t stat;
 
-	/** Reg addr: 0x42 */
+	/** Reg addr: 0x0xFF42 */
 	uint8_t scy;
-	/** Reg addr: 0x43 */
+	/** Reg addr: 0x0xFF43 */
 	uint8_t scx;
-	/** Reg addr: 0x44 */
+	/** Reg addr: 0x0xFF44 */
 	uint8_t ly;
-	/** Reg addr: 0x45 */
+	/** Reg addr: 0x0xFF45 */
 	uint8_t lyc;
-	/** Reg addr: 0x46 */
+	/** Reg addr: 0x0xFF46 */
 	uint8_t oam_dma;
-	/** Reg addr: 0x47 */
+	/** Reg addr: 0x0xFF47 */
 	uint8_t bgp;
-	/** Reg addr: 0x48 */
+	/** Reg addr: 0x0xFF48 */
 	uint8_t obp0;
-	/** Reg addr: 0x49 */
+	/** Reg addr: 0x0xFF49 */
 	uint8_t obp1;
-	/** Reg addr: 0x4A */
+	/** Reg addr: 0x0xFF4A */
 	uint8_t wy;
-	/** Reg addr: 0x4B */
+	/** Reg addr: 0x0xFF4B */
 	uint8_t wx;
 } ppu;
 
@@ -63,19 +63,9 @@ static inline uint8_t ppu_get_mode(void)
 	return ppu.stat & STAT_PPU_MODE;
 }
 
-#define LY_RESET 0
-#define LY_INCREASE 1
-static void ppu_update_ly(uint8_t op)
+static void check_lyc_equals_ly(void)
 {
-	if (op == LY_RESET) {
-		ppu.ly = 0;
-	} else if (op == LY_INCREASE) {
-		ppu.ly += 1;
-	} else {
-		return;
-	}
-
-	if (ppu.ly == ppu.lyc) {
+	if (ppu.lyc == ppu.ly) {
 		ppu.stat |= STAT_LYC_EQS_LY;
 		if (ppu.stat & STAT_LYC_INT) {
 			cpu_irq_raise(IRQ_LCD);
@@ -83,6 +73,18 @@ static void ppu_update_ly(uint8_t op)
 	} else {
 		ppu.stat &= ~STAT_LYC_EQS_LY;
 	}
+}
+
+static inline void ppu_ly_inc()
+{
+	ppu.ly += 1;
+	check_lyc_equals_ly();
+}
+
+static inline void ppu_ly_reset()
+{
+	ppu.ly = 0;
+	check_lyc_equals_ly();
 }
 
 static inline void ppu_set_mode(uint8_t mode)
@@ -101,7 +103,7 @@ static inline void ppu_set_mode(uint8_t mode)
 		cpu_irq_raise(IRQ_VBLANK);
 	}
 
-	if ((mode << 3) & ppu.stat & 0x38) {
+	if ((8 << mode) & ppu.stat & 0x38) {
 		cpu_irq_raise(IRQ_LCD);
 	}
 }
@@ -109,29 +111,29 @@ static inline void ppu_set_mode(uint8_t mode)
 uint8_t ppu_reg_read(uint16_t addr)
 {
 	switch (addr) {
-	case 0x40:
+	case 0xFF40:
 		return ppu.lcdc;
-	case 0x41:
+	case 0xFF41:
 		return ppu.stat;
-	case 0x42:
+	case 0xFF42:
 		return ppu.scy;
-	case 0x43:
+	case 0xFF43:
 		return ppu.scx;
-	case 0x44:
+	case 0xFF44:
 		return ppu.ly;
-	case 0x45:
+	case 0xFF45:
 		return ppu.lyc;
-	case 0x46:
+	case 0xFF46:
 		return ppu.oam_dma;
-	case 0x47:
+	case 0xFF47:
 		return ppu.bgp;
-	case 0x48:
+	case 0xFF48:
 		return ppu.obp0;
-	case 0x49:
+	case 0xFF49:
 		return ppu.obp1;
-	case 0x4A:
+	case 0xFF4A:
 		return ppu.wy;
-	case 0x4B:
+	case 0xFF4B:
 		return ppu.wx;
 	default:
 		return 0xFF;
@@ -143,42 +145,43 @@ static void oam_dma_start(uint8_t addr_hi);
 void ppu_reg_write(uint16_t addr, uint8_t value)
 {
 	switch (addr) {
-	case 0x40:
+	case 0xFF40:
 		ppu.lcdc = value;
 		break;
-	case 0x41:
+	case 0xFF41:
 		/**bit[2:0] of stat is read only */
 		ppu.stat &= 0x07;
 		ppu.stat |= (value & 0xF8);
 		break;
-	case 0x42:
+	case 0xFF42:
 		ppu.scy = value;
 		break;
-	case 0x43:
+	case 0xFF43:
 		ppu.scx = value;
 		break;
-	case 0x44:
+	case 0xFF44:
 		/**ly is read only */
 		break;
-	case 0x45:
+	case 0xFF45:
 		ppu.lyc = value;
 		break;
-	case 0x46:
+	case 0xFF46:
+		ppu.oam_dma = value;
 		oam_dma_start(value);
 		break;
-	case 0x47:
+	case 0xFF47:
 		ppu.bgp = value;
 		break;
-	case 0x48:
+	case 0xFF48:
 		ppu.obp0 = value;
 		break;
-	case 0x49:
+	case 0xFF49:
 		ppu.obp1 = value;
 		break;
-	case 0x4A:
+	case 0xFF4A:
 		ppu.wy = value;
 		break;
-	case 0x4B:
+	case 0xFF4B:
 		ppu.wx = value;
 		break;
 	default:
@@ -232,9 +235,7 @@ static void oam_dma_start(uint8_t addr_hi)
 
 static void oam_dma_run(uint8_t ticks)
 {
-	uint8_t mode = ppu_get_mode();
-	/** OAM is accessible only when ppu is in mode 0 and 1 */
-	if (dma.state != DMA_RUNNING || mode >= 2) {
+	if (dma.state != DMA_RUNNING) {
 		return;
 	}
 
@@ -315,7 +316,7 @@ static void ppu_scan_oam(void)
 
 	while (obj_max < MAX_OBJ_ACTIVE && j < MAX_OBJ_TOTAL) {
 		if (oa->x > 0 && oa->x < 168 && ppu.ly + 16 >= oa->y &&
-		    ppu.ly + 16 <= oa->y + obj_size) {
+		    ppu.ly + 16 < oa->y + obj_size) {
 			objs_active[obj_max++] = j;
 		}
 
@@ -347,22 +348,24 @@ void ppu_step(uint8_t ticks)
 	case 0:
 		if (tcycles >= TCYCLES_PER_LINE) {
 			tcycles %= TCYCLES_PER_LINE;
-			ppu_update_ly(LY_INCREASE);
-		}
-		if (ppu.ly < LINES_BEFORE_VBLANK) {
-			ppu_set_mode(2);
-		} else {
-			ppu_set_mode(1);
+			ppu_ly_inc();
+
+			if (ppu.ly < LINES_BEFORE_VBLANK) {
+				ppu_set_mode(2);
+			} else {
+				ppu_set_mode(1);
+			}
 		}
 		break;
 	case 1:
 		if (tcycles >= TCYCLES_PER_LINE) {
 			tcycles %= TCYCLES_PER_LINE;
-			ppu_update_ly(LY_INCREASE);
-		}
-		if (ppu.ly >= LINES_PER_FRAME) {
-			ppu_update_ly(LY_RESET);
-			ppu_set_mode(2);
+			ppu_ly_inc();
+
+			if (ppu.ly >= LINES_PER_FRAME) {
+				ppu_ly_reset();
+				ppu_set_mode(2);
+			}
 		}
 		break;
 	case 2:
