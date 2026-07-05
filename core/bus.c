@@ -66,12 +66,8 @@ static uint8_t io_reg_read(uint16_t addr)
 	} else if (addr >= 0xFF30 && addr <= 0xFF3F) {
 		/** TODO: wave patterns */
 		return 0;
-	} else if (addr == 0xFF46) {
-		/** TODO: OAM */
-		return 0xFF;
 	} else if (addr >= 0xFF40 && addr <= 0xFF4B) {
-		/** TODO: lcd control, status, position, scrolling and palletes */
-		return 0xFF;
+		return ppu_reg_read(addr);
 	} else if (addr == 0xFF50) {
 		/** TODO: boot rom mapping control */
 	} else {
@@ -96,10 +92,8 @@ static void io_reg_write(uint16_t addr, uint8_t value)
 		/** TODO: audio*/
 	} else if (addr >= 0xFF30 && addr <= 0xFF3F) {
 		/** TODO: wave patterns */
-	} else if (addr == 0xFF46) {
-		/** TODO: OAM */
 	} else if (addr >= 0xFF40 && addr <= 0xFF4B) {
-		/** TODO: lcd control, status, position, scrolling and palletes */
+		ppu_reg_write(addr, value);
 	} else if (addr == 0xFF50) {
 		mbc_mapping_control_write(value);
 	} else {
@@ -123,7 +117,7 @@ uint8_t bus_read8(uint16_t addr)
 		/** Echo RAM, use of this area prohibited */
 		return 0xFF;
 	} else if (addr <= 0xFE9F) {
-		/** TODO: OAM */
+		return ppu_oam_read(addr);
 	} else if (addr <= 0xFEFF) {
 		/** Use of this area is prohibited */
 		return 0xFF;
@@ -152,7 +146,7 @@ void bus_write8(uint16_t addr, uint8_t value)
 	} else if (addr <= 0xFDFF) {
 		/** Echo RAM, use of this area prohibited */
 	} else if (addr <= 0xFE9F) {
-		/** TODO: OAM */
+		ppu_oam_write(addr, value);
 	} else if (addr <= 0xFEFF) {
 		/** Use of this area is prohibited */
 	} else if (addr <= 0xFF7F) {

@@ -2,6 +2,7 @@
 
 #include <gamebox/hal.h>
 #include "cpu.h"
+#include "ppu.h"
 #include "device.h"
 #include "mbc.h"
 
@@ -25,6 +26,7 @@ uint8_t gb_step(void)
 
 	uint8_t ticks = cpu_step();
 	timer_step(ticks);
+	ppu_step(ticks);
 
 	return ticks;
 }
