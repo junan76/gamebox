@@ -257,7 +257,17 @@ static void oam_dma_run(uint8_t ticks)
 /**
  * VRAM read/write
  */
+
+#define SZ_2KB 2048
+#define SZ_4KB 4096
+#define SZ_6KB 6144
+#define SZ_7KB 7168
+
 static uint8_t vram[8192];
+/** Tile data block0, block1 and block2 */
+static uint8_t *tile_datas[3] = { vram, vram + SZ_2KB, vram + SZ_4KB };
+/** Tile map block0 and block1 */
+static uint8_t *tile_maps[2] = { vram + SZ_6KB, vram + SZ_7KB };
 
 uint8_t ppu_vram_read(uint16_t addr)
 {
@@ -292,6 +302,7 @@ struct object_attr {
  */
 #define MAX_OBJ_TOTAL 40
 #define MAX_OBJ_ACTIVE 10
+#define OBJ_NONE 0xFF
 static uint8_t objs_active[MAX_OBJ_ACTIVE];
 
 static void ppu_scan_oam(void)
@@ -306,7 +317,7 @@ static void ppu_scan_oam(void)
 	}
 
 	for (i = 0; i < MAX_OBJ_ACTIVE; i++) {
-		objs_active[i] = 0xFF;
+		objs_active[i] = OBJ_NONE;
 	}
 
 	obj_max = 0;
@@ -325,8 +336,176 @@ static void ppu_scan_oam(void)
 	}
 }
 
+static uint8_t line_buf[160];
+
+#define PIXEL_COLOR_WHILE 0
+#define PIXEL_COLOR_L_GRAY 1
+#define PIXEL_COLOR_D_GRAY 2
+#define PIXEL_COLOR_BLACK 3
+#define PIXEL_COLOR_NONE 4
+#define PIXEL_COLOR_PRIORITY 128
+
+static uint8_t bg_win_tile_pixel(uint16_t tile_index, uint8_t x, uint8_t y)
+{
+	uint8_t *tile;
+	uint8_t lo, hi, color_id;
+
+	/** 0x8000 method when lcdc.4 == 1 */
+	if (ppu.lcdc & LCDC_TILE_DATA) {
+		tile = tile_datas[0] + 16 * tile_index;
+	}
+	/** 0x8800 method otherwise */
+	else {
+		tile = tile_index >= 128
+			       ? tile_datas[1] + 16 * (tile_index % 128)
+			       : tile_datas[2] + 16 * tile_index;
+	}
+
+	lo = *(tile + 2 * y);
+	hi = *(tile + 2 * y + 1);
+	color_id = (lo >> x) | ((hi >> x) << 1) & 0x03;
+
+	return (ppu.bgp >> (color_id * 2)) & 0x03;
+}
+
+static uint8_t bg_pixel_at(uint8_t x, uint8_t y)
+{
+	if (!(ppu.lcdc & LCDC_BG_WIN_DISPLAY)) {
+		return ppu.bgp & 0x03;
+	}
+
+	uint16_t tile_map_index;
+	uint8_t *tile_map;
+
+	uint16_t tile_index;
+
+	x += ppu.scx;
+	y += ppu.scy;
+
+	tile_map_index = y / 8 * 32 + x / 8;
+	tile_map = (ppu.lcdc & LCDC_BG_MAP) ? tile_maps[1] : tile_maps[0];
+	tile_index = tile_map[tile_map_index];
+
+	return bg_win_tile_pixel(tile_index, x % 8, y % 8);
+}
+
+static uint8_t win_pixel_at(uint8_t x, uint8_t y)
+{
+	if (!(ppu.lcdc & LCDC_BG_WIN_DISPLAY) ||
+	    !(ppu.lcdc & LCDC_WIN_ENABLE)) {
+		return PIXEL_COLOR_NONE;
+	}
+
+	uint8_t wx, wy;
+
+	uint16_t tile_map_index;
+	uint8_t *tile_map;
+
+	uint16_t tile_index;
+	uint8_t *tile;
+
+	uint8_t lo, hi, color_id;
+
+	wx = ppu.wx < 7 ? 0 : ppu.wx - 7;
+	wy = ppu.wy;
+
+	if (x < wx || y < wy) {
+		return PIXEL_COLOR_NONE;
+	}
+
+	x -= wx;
+	y -= wy;
+
+	tile_map_index = y / 8 * 32 + x / 8;
+	tile_map = (ppu.lcdc & LCDC_WIN_MAP) ? tile_maps[1] : tile_maps[0];
+	tile_index = tile_map[tile_map_index];
+
+	return bg_win_tile_pixel(tile_index, x % 8, y % 8);
+}
+
+static uint8_t obj_pixel_at(uint8_t x, uint8_t y)
+{
+	uint8_t obj_size;
+
+	uint8_t obj = OBJ_NONE;
+	uint8_t ox, oy;
+	struct object_attr *oa;
+
+	uint8_t *tile;
+	uint8_t lo, hi, color_id;
+	uint8_t obp;
+
+	obj_size = ppu.lcdc & LCDC_OBJ_SIZE ? 16 : 8;
+	x += 8;
+	y += 16;
+
+	for (int i = 0; i < MAX_OBJ_ACTIVE; i++) {
+		if (objs_active[i] == OBJ_NONE) {
+			break;
+		}
+
+		oa = (struct object_attr *)oam + i;
+		ox = oa->x;
+		oy = oa->y;
+
+		if (x >= ox && x < ox + 8 && y >= oy && y < oy + obj_size) {
+			obj = i;
+			break;
+		}
+	}
+
+	if (obj == OBJ_NONE) {
+		return PIXEL_COLOR_NONE;
+	}
+
+	x -= ox;
+	y -= oy;
+
+	if (oa->attr & ATTR_X_FLIP) {
+		x = 7 - x;
+	}
+	if (oa->attr & ATTR_Y_FLIP) {
+		y = obj_size - 1 - y;
+	}
+
+	tile = tile_datas[0] + 16 * (uint16_t)oa->tile;
+	if (y >= 8) {
+		tile += 16;
+		y -= 8;
+	}
+
+	lo = *(tile + 2 * y);
+	hi = *(tile + 2 * y + 1);
+	obp = oa->attr & ATTR_PALETTE ? ppu.obp1 : ppu.obp0;
+	color_id = (lo >> x) | ((hi >> x) << 1) & 0x03;
+
+	return (obp >> (color_id * 2)) & 0x03 | (oa->attr & ATTR_PRIORITY);
+}
+
 static void ppu_draw_line(void)
 {
+	uint8_t pixels[3];
+	uint8_t color;
+
+	for (int i = 0; i < 160; i++) {
+		pixels[0] = bg_pixel_at(i, ppu.ly);
+		pixels[1] = win_pixel_at(i, ppu.ly);
+		pixels[2] = obj_pixel_at(i, ppu.ly);
+
+		color = pixels[0];
+
+		/**
+		 * TODO: color mixing
+		 */
+		if (pixels[1] != PIXEL_COLOR_NONE) {
+			color = pixels[1];
+		}
+
+		if (pixels[2] != PIXEL_COLOR_NONE) {
+		}
+
+		line_buf[i] = color;
+	}
 }
 
 void ppu_step(uint8_t ticks)
