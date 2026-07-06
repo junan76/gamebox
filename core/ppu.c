@@ -14,7 +14,7 @@ static struct {
 #define LCDC_OBJ_SIZE 4
 #define LCDC_OBJ_ENABLE 2
 #define LCDC_BG_WIN_DISPLAY 1
-	/** Reg addr: 0x0xFF40 */
+	/** Reg addr: 0xFF40 */
 	uint8_t lcdc;
 
 #define STAT_LYC_INT 64
@@ -23,28 +23,28 @@ static struct {
 #define STAT_MODE0_INT 8
 #define STAT_LYC_EQS_LY 4
 #define STAT_PPU_MODE 3
-	/** Reg addr: 0x0xFF41 */
+	/** Reg addr: 0xFF41 */
 	uint8_t stat;
 
-	/** Reg addr: 0x0xFF42 */
+	/** Reg addr: 0xFF42 */
 	uint8_t scy;
-	/** Reg addr: 0x0xFF43 */
+	/** Reg addr: 0xFF43 */
 	uint8_t scx;
-	/** Reg addr: 0x0xFF44 */
+	/** Reg addr: 0xFF44 */
 	uint8_t ly;
-	/** Reg addr: 0x0xFF45 */
+	/** Reg addr: 0xFF45 */
 	uint8_t lyc;
-	/** Reg addr: 0x0xFF46 */
+	/** Reg addr: 0xFF46 */
 	uint8_t oam_dma;
-	/** Reg addr: 0x0xFF47 */
+	/** Reg addr: 0xFF47 */
 	uint8_t bgp;
-	/** Reg addr: 0x0xFF48 */
+	/** Reg addr: 0xFF48 */
 	uint8_t obp0;
-	/** Reg addr: 0x0xFF49 */
+	/** Reg addr: 0xFF49 */
 	uint8_t obp1;
-	/** Reg addr: 0x0xFF4A */
+	/** Reg addr: 0xFF4A */
 	uint8_t wy;
-	/** Reg addr: 0x0xFF4B */
+	/** Reg addr: 0xFF4B */
 	uint8_t wx;
 } ppu;
 
@@ -307,6 +307,9 @@ static uint8_t objs_active[MAX_OBJ_ACTIVE];
 
 static void ppu_scan_oam(void)
 {
+	/**
+	 * TODO: sort objects with x before scaning
+	 */
 	uint8_t obj_max;
 	uint8_t obj_size;
 	uint8_t i, j;
@@ -336,13 +339,22 @@ static void ppu_scan_oam(void)
 	}
 }
 
-static uint8_t line_buf[160];
-
-#define PIXEL_COLOR_WHILE 0
+/**
+ * Pixel color format
+ * bit[7]: object attributes.7 which means priority
+ * bit[6]: not a pixel, used when window/object has no pixel at that position
+ * bit[3:2]: color index
+ * bit[1:0]: color value
+ */
+#define PIXEL_COLOR_WHITE 0
 #define PIXEL_COLOR_L_GRAY 1
 #define PIXEL_COLOR_D_GRAY 2
 #define PIXEL_COLOR_BLACK 3
-#define PIXEL_COLOR_NONE 4
+
+#define COLOR_MASK 0x03
+#define COLOR_ID_MASK 0x0C
+
+#define PIXEL_COLOR_NONE 64
 #define PIXEL_COLOR_PRIORITY 128
 
 static uint8_t bg_win_tile_pixel(uint16_t tile_index, uint8_t x, uint8_t y)
@@ -361,11 +373,11 @@ static uint8_t bg_win_tile_pixel(uint16_t tile_index, uint8_t x, uint8_t y)
 			       : tile_datas[2] + 16 * tile_index;
 	}
 
-	lo = *(tile + 2 * y);
-	hi = *(tile + 2 * y + 1);
-	color_id = (lo >> x) | ((hi >> x) << 1) & 0x03;
+	lo = *(tile + 2 * y) >> (7 - x);
+	hi = *(tile + 2 * y + 1) >> (7 - x);
+	color_id = ((hi & 0x1) << 1) | (lo & 0x1);
 
-	return (ppu.bgp >> (color_id * 2)) & 0x03;
+	return ((ppu.bgp >> (color_id * 2)) & 0x03) | (color_id << 2);
 }
 
 static uint8_t bg_pixel_at(uint8_t x, uint8_t y)
@@ -402,9 +414,6 @@ static uint8_t win_pixel_at(uint8_t x, uint8_t y)
 	uint8_t *tile_map;
 
 	uint16_t tile_index;
-	uint8_t *tile;
-
-	uint8_t lo, hi, color_id;
 
 	wx = ppu.wx < 7 ? 0 : ppu.wx - 7;
 	wy = ppu.wy;
@@ -444,7 +453,7 @@ static uint8_t obj_pixel_at(uint8_t x, uint8_t y)
 			break;
 		}
 
-		oa = (struct object_attr *)oam + i;
+		oa = (struct object_attr *)oam + objs_active[i];
 		ox = oa->x;
 		oy = oa->y;
 
@@ -468,24 +477,32 @@ static uint8_t obj_pixel_at(uint8_t x, uint8_t y)
 		y = obj_size - 1 - y;
 	}
 
-	tile = tile_datas[0] + 16 * (uint16_t)oa->tile;
+	tile = tile_datas[0] +
+	       16 * ((uint16_t)oa->tile & (obj_size == 16 ? 0xFE : 0xFF));
 	if (y >= 8) {
 		tile += 16;
 		y -= 8;
 	}
 
-	lo = *(tile + 2 * y);
-	hi = *(tile + 2 * y + 1);
+	lo = *(tile + 2 * y) >> (7 - x);
+	hi = *(tile + 2 * y + 1) >> (7 - x);
 	obp = oa->attr & ATTR_PALETTE ? ppu.obp1 : ppu.obp0;
-	color_id = (lo >> x) | ((hi >> x) << 1) & 0x03;
+	color_id = ((hi & 0x1) << 1) | (lo & 0x1);
 
-	return (obp >> (color_id * 2)) & 0x03 | (oa->attr & ATTR_PRIORITY);
+	return ((obp >> (color_id * 2)) & 0x03) | (color_id << 2) |
+	       (oa->attr & ATTR_PRIORITY);
 }
+
+/**
+ * The color values for current scan line
+ */
+static uint8_t line_buf[160];
 
 static void ppu_draw_line(void)
 {
 	uint8_t pixels[3];
 	uint8_t color;
+	uint8_t bg_win_priority;
 
 	for (int i = 0; i < 160; i++) {
 		pixels[0] = bg_pixel_at(i, ppu.ly);
@@ -494,18 +511,26 @@ static void ppu_draw_line(void)
 
 		color = pixels[0];
 
-		/**
-		 * TODO: color mixing
-		 */
 		if (pixels[1] != PIXEL_COLOR_NONE) {
 			color = pixels[1];
 		}
 
-		if (pixels[2] != PIXEL_COLOR_NONE) {
+		if (pixels[2] != PIXEL_COLOR_NONE &&
+		    (pixels[2] & COLOR_ID_MASK)) {
+			bg_win_priority = pixels[2] & PIXEL_COLOR_PRIORITY;
+
+			if (!bg_win_priority ||
+			    (bg_win_priority && !(color & COLOR_ID_MASK))) {
+				color = pixels[2];
+			}
 		}
 
-		line_buf[i] = color;
+		line_buf[i] = color & COLOR_MASK;
 	}
+
+	/**
+	 * TODO: draw line on the screen
+	 */
 }
 
 void ppu_step(uint8_t ticks)
@@ -555,7 +580,7 @@ void ppu_step(uint8_t ticks)
 		break;
 	case 3:
 		if (tcycles >= TCYCLES_MODE3_0) {
-			/** TODO: draw line pixels */
+			ppu_draw_line();
 			ppu_set_mode(0);
 		}
 		break;
