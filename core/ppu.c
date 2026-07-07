@@ -271,7 +271,9 @@ static uint8_t *tile_maps[2] = { vram + SZ_6KB, vram + SZ_7KB };
 
 uint8_t ppu_vram_read(uint16_t addr)
 {
-	if (addr < 0x8000 || addr > 0x9FFF || ppu_get_mode() == 3) {
+	/** TODO: fix ppu_step when ppu is disabled */
+	// if (addr < 0x8000 || addr > 0x9FFF || ppu_get_mode() == 3) {
+	if (addr < 0x8000 || addr > 0x9FFF) {
 		return 0xFF;
 	}
 	return vram[addr - 0x8000];
@@ -279,7 +281,8 @@ uint8_t ppu_vram_read(uint16_t addr)
 
 void ppu_vram_write(uint16_t addr, uint8_t value)
 {
-	if (addr < 0x8000 || addr > 0x9FFF || ppu_get_mode() == 3) {
+	// if (addr < 0x8000 || addr > 0x9FFF || ppu_get_mode() == 3) {
+	if (addr < 0x8000 || addr > 0x9FFF) {
 		return;
 	}
 	vram[addr - 0x8000] = value;
@@ -315,12 +318,12 @@ static void ppu_scan_oam(void)
 	uint8_t i, j;
 	struct object_attr *oa;
 
-	if (!ppu_obj_enabled()) {
-		return;
-	}
-
 	for (i = 0; i < MAX_OBJ_ACTIVE; i++) {
 		objs_active[i] = OBJ_NONE;
+	}
+
+	if (!ppu_obj_enabled()) {
+		return;
 	}
 
 	obj_max = 0;
@@ -496,7 +499,8 @@ static uint8_t obj_pixel_at(uint8_t x, uint8_t y)
 /**
  * The color values for current scan line
  */
-static uint8_t line_buf[160];
+uint8_t line_buf[160];
+uint8_t line_id;
 
 static void ppu_draw_line(void)
 {
@@ -531,6 +535,7 @@ static void ppu_draw_line(void)
 	/**
 	 * TODO: draw line on the screen
 	 */
+	line_id = ppu.ly;
 }
 
 void ppu_step(uint8_t ticks)

@@ -1,2 +1,3 @@
 add_executable(gamebox main.c)
-target_link_libraries(gamebox PRIVATE gb_core)
+find_package(raylib REQUIRED)
+target_link_libraries(gamebox PRIVATE gb_core raylib)
