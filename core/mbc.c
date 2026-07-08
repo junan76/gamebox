@@ -11,8 +11,7 @@ struct mbc_header {
 	uint8_t entry[4];
 	uint8_t logo[48];
 	uint8_t title[16];
-	uint8_t cgb;
-	uint8_t license_new;
+	uint8_t license_new[2];
 	uint8_t sgb;
 	uint8_t mbc_type;
 	uint8_t rom_size;
