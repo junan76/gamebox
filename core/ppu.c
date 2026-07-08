@@ -149,11 +149,12 @@ void ppu_reg_write(uint16_t addr, uint8_t value)
 	switch (addr) {
 	case 0xFF40:
 		if (!ppu_enabled() && (value & LCDC_ENABLE)) {
-			ppu.stat |= 0x02;
+			ppu.stat = (ppu.stat & ~0x03) | 0x02;
 			ppu.ly = 0;
 			ppu.tcycles = 0;
 		} else if (ppu_enabled() && !(value & LCDC_ENABLE)) {
-			ppu.stat &= 0xFC;
+			ppu.stat &= ~0x03;
+			ppu.ly = 0;
 		}
 		ppu.lcdc = value;
 		break;
