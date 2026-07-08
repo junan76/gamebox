@@ -1739,8 +1739,17 @@ uint8_t cpu_step(void)
 void cpu_reset(void)
 {
 	/**
-	 * TODO: reset interrupts and other things.
+	 * Reset cpu registers
 	 */
+#ifdef USE_BOOT_ROM
+	cpu->regs.af = 0;
+	cpu->regs.bc = 0;
+	cpu->regs.de = 0;
+	cpu->regs.hl = 0;
+
+	cpu->regs.pc = 0;
+	cpu->regs.sp = 0;
+#else
 	cpu->regs.a = 0x01;
 	cpu->regs.z_flag = 1;
 	cpu->regs.n_flag = 0;
@@ -1758,6 +1767,18 @@ void cpu_reset(void)
 
 	cpu->regs.pc = 0x0100;
 	cpu->regs.sp = 0xFFFE;
+#endif
+	/**
+	 * Reset interrupts and others
+	 */
+	cpu->ie = 0;
+	cpu->ime = 0;
+	cpu->ime_pending = 0;
+	cpu->irq = 0;
+
+	cpu->halted = 0;
+	cpu->halt_bug = 0;
+	cpu->stopped = 0;
 }
 
 uint8_t cpu_ie_read()

@@ -77,25 +77,25 @@ static uint8_t dmg_boot_rom[256] = {
 	0xf5, 0x06, 0x19, 0x78, 0x86, 0x23, 0x05, 0x20, 0xfb, 0x86, 0x20, 0xfe,
 	0x3e, 0x01, 0xe0, 0x50
 };
-/**
- * TODO: use boot rom and update cpu_reset implementation
- * Boot rom unmapped by default for now
- */
-static uint8_t boot_rom_unmapped = 1;
 
+#ifdef USE_BOOT_ROM
+static uint8_t boot_rom_mapped = 1;
+#else
+static uint8_t boot_rom_mapped = 0;
+#endif
 void mbc_mapping_control_write(uint8_t value)
 {
-	if (boot_rom_unmapped) {
+	if (!boot_rom_mapped) {
 		return;
 	}
 	if (value) {
-		boot_rom_unmapped = 1;
+		boot_rom_mapped = 0;
 	}
 }
 
 uint8_t mbc_rom_read(uint16_t addr)
 {
-	if (addr < 0x100 && boot_rom_unmapped == 0) {
+	if (addr < 0x100 && boot_rom_mapped) {
 		return dmg_boot_rom[addr];
 	}
 
