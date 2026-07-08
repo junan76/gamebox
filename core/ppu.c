@@ -46,6 +46,8 @@ static struct {
 	uint8_t wy;
 	/** Reg addr: 0xFF4B */
 	uint8_t wx;
+
+	uint16_t tcycles;
 } ppu;
 
 static inline uint8_t ppu_enabled(void)
@@ -146,6 +148,13 @@ void ppu_reg_write(uint16_t addr, uint8_t value)
 {
 	switch (addr) {
 	case 0xFF40:
+		if (!ppu_enabled() && (value & LCDC_ENABLE)) {
+			ppu.stat |= 0x02;
+			ppu.ly = 0;
+			ppu.tcycles = 0;
+		} else if (ppu_enabled() && !(value & LCDC_ENABLE)) {
+			ppu.stat &= 0xFC;
+		}
 		ppu.lcdc = value;
 		break;
 	case 0xFF41:
@@ -263,17 +272,16 @@ static void oam_dma_run(uint8_t ticks)
 #define SZ_6KB 6144
 #define SZ_7KB 7168
 
+/**
+ * Tile data and tile map are stored in vram
+ */
 static uint8_t vram[8192];
-/** Tile data block0, block1 and block2 */
 static uint8_t *tile_datas[3] = { vram, vram + SZ_2KB, vram + SZ_4KB };
-/** Tile map block0 and block1 */
 static uint8_t *tile_maps[2] = { vram + SZ_6KB, vram + SZ_7KB };
 
 uint8_t ppu_vram_read(uint16_t addr)
 {
-	/** TODO: fix ppu_step when ppu is disabled */
-	// if (addr < 0x8000 || addr > 0x9FFF || ppu_get_mode() == 3) {
-	if (addr < 0x8000 || addr > 0x9FFF) {
+	if (addr < 0x8000 || addr > 0x9FFF || ppu_get_mode() == 3) {
 		return 0xFF;
 	}
 	return vram[addr - 0x8000];
@@ -281,8 +289,7 @@ uint8_t ppu_vram_read(uint16_t addr)
 
 void ppu_vram_write(uint16_t addr, uint8_t value)
 {
-	// if (addr < 0x8000 || addr > 0x9FFF || ppu_get_mode() == 3) {
-	if (addr < 0x8000 || addr > 0x9FFF) {
+	if (addr < 0x8000 || addr > 0x9FFF || ppu_get_mode() == 3) {
 		return;
 	}
 	vram[addr - 0x8000] = value;
@@ -547,16 +554,18 @@ void ppu_step(uint8_t ticks)
 #define LINES_BEFORE_VBLANK 144
 #define LINES_PER_FRAME 154
 
-	static uint16_t tcycles = 0;
-	uint8_t mode = ppu_get_mode();
-
-	tcycles += ticks;
 	oam_dma_run(ticks);
 
-	switch (mode) {
+	if (!ppu_enabled()) {
+		return;
+	}
+
+	ppu.tcycles += ticks;
+
+	switch (ppu_get_mode()) {
 	case 0:
-		if (tcycles >= TCYCLES_PER_LINE) {
-			tcycles %= TCYCLES_PER_LINE;
+		if (ppu.tcycles >= TCYCLES_PER_LINE) {
+			ppu.tcycles %= TCYCLES_PER_LINE;
 			ppu_ly_inc();
 
 			if (ppu.ly < LINES_BEFORE_VBLANK) {
@@ -567,8 +576,8 @@ void ppu_step(uint8_t ticks)
 		}
 		break;
 	case 1:
-		if (tcycles >= TCYCLES_PER_LINE) {
-			tcycles %= TCYCLES_PER_LINE;
+		if (ppu.tcycles >= TCYCLES_PER_LINE) {
+			ppu.tcycles %= TCYCLES_PER_LINE;
 			ppu_ly_inc();
 
 			if (ppu.ly >= LINES_PER_FRAME) {
@@ -578,13 +587,13 @@ void ppu_step(uint8_t ticks)
 		}
 		break;
 	case 2:
-		if (tcycles >= TCYCLES_MODE2_3) {
+		if (ppu.tcycles >= TCYCLES_MODE2_3) {
 			ppu_scan_oam();
 			ppu_set_mode(3);
 		}
 		break;
 	case 3:
-		if (tcycles >= TCYCLES_MODE3_0) {
+		if (ppu.tcycles >= TCYCLES_MODE3_0) {
 			ppu_draw_line();
 			ppu_set_mode(0);
 		}
