@@ -95,7 +95,7 @@ static void io_reg_write(uint16_t addr, uint8_t value)
 	} else if (addr >= 0xFF40 && addr <= 0xFF4B) {
 		ppu_reg_write(addr, value);
 	} else if (addr == 0xFF50) {
-		mbc_mapping_control_write(value);
+		mbc_bootmap_write(value);
 	} else {
 		/** TODO: others */
 	}
@@ -110,7 +110,7 @@ uint8_t bus_read8(uint16_t addr)
 		return ppu_vram_read(addr);
 	} else if (addr <= 0xBFFF) {
 		/** External RAM */
-		return mbc_ram_external_read(addr);
+		return mbc_ram_read(addr);
 	} else if (addr <= 0xDFFF) {
 		return work_ram_read(addr);
 	} else if (addr <= 0xFDFF) {
@@ -140,7 +140,7 @@ void bus_write8(uint16_t addr, uint8_t value)
 		ppu_vram_write(addr, value);
 	} else if (addr <= 0xBFFF) {
 		/** External RAM */
-		mbc_ram_external_write(addr, value);
+		mbc_ram_write(addr, value);
 	} else if (addr <= 0xDFFF) {
 		work_ram_write(addr, value);
 	} else if (addr <= 0xFDFF) {
