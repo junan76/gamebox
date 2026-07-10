@@ -19,10 +19,10 @@ uint8_t gb_init(const char *rom_path)
 	return 0;
 }
 
-uint8_t gb_step(void)
+uint8_t gb_step(uint8_t keys)
 {
 	// uint8_t keys = hal_input_poll();
-	joypad_report_keys(0);
+	joypad_report_keys(keys);
 
 	uint8_t ticks = cpu_step();
 	timer_step(ticks);

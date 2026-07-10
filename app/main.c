@@ -30,8 +30,36 @@ int main(int argc, char const *argv[])
 	uint32_t ticks = 0;
 	SetTargetFPS(60);
 	while (!WindowShouldClose()) {
+		uint8_t keys = 0;
+
+		if (IsKeyDown(KEY_D)) {
+			keys |= 0x01;
+		}
+		if (IsKeyDown(KEY_A)) {
+			keys |= 0x02;
+		}
+		if (IsKeyDown(KEY_W)) {
+			keys |= 0x04;
+		}
+		if (IsKeyDown(KEY_S)) {
+			keys |= 0x08;
+		}
+
+		if (IsKeyDown(KEY_O)) {
+			keys |= 0x10;
+		}
+		if (IsKeyDown(KEY_K)) {
+			keys |= 0x20;
+		}
+		if (IsKeyDown(KEY_I)) {
+			keys |= 0x40;
+		}
+		if (IsKeyDown(KEY_J)) {
+			keys |= 0x80;
+		}
+
 		while (ticks < 70224) {
-			ticks += gb_step();
+			ticks += gb_step(keys);
 			if (line_id != 0xFF) {
 				for (int i = 0; i < 160; i++) {
 					uint8_t color = line_buf[i] & 0x03;
