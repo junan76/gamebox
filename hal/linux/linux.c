@@ -34,9 +34,8 @@ uint8_t hal_load(void *rd, uint8_t *buf, uint8_t bank_id)
 	}
 
 	if (fread(buf, 1, SZ_16KB, (FILE *)rd) != SZ_16KB) {
-		rc = ferror((FILE *)rd);
-		printf("fread fail: %d\n", rc);
-		return rc;
+		printf("fread: no enough data\n");
+		return 1;
 	}
 
 	return 0;

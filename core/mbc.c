@@ -17,11 +17,7 @@ struct mbc_type {
 	uint8_t rom_size;
 	uint8_t ram_size;
 
-	uint8_t ram_enabled;
-	uint8_t ram_id;
-
 	uint8_t rom_id[2];
-	uint8_t rom_cached_id[2];
 
 	uint8_t ioctl_reg[4];
 
@@ -114,17 +110,21 @@ static uint8_t dmg_boot_rom[256] = {
 #define MBC_NO_MBC 0x00
 #define MBC_MBC1 0x01
 #define MBC_MBC1_RAM 0x02
+#define MBC_MBC1_RAM_BATTERY 0x03
 #define MBC_MBC3 0x11
 #define MBC_MBC3_RAM 0x12
+#define MBC_MBC3_RAM_BATTERY 0x13
 #define MBC_MBC5 0x19
-#define MBC_MBC5_RAM 0x20
-#define MAX_MBC_SUPPORT 7
-#define MBC_INVALID_TYPE 0xCC
+#define MBC_MBC5_RAM 0x1A
+#define MBC_MBC5_RAM_BATTERY 0x1B
+#define MAX_MBC_SUPPORT 10
+#define MBC_NO_SUCH_TYPE 0xCC
 
 static uint8_t mbc_supported[MAX_MBC_SUPPORT] = {
 	MBC_NO_MBC,
 	MBC_MBC1,
 	MBC_MBC1_RAM,
+	MBC_MBC1_RAM_BATTERY,
 };
 static struct mbc_type mbc;
 
@@ -134,22 +134,15 @@ uint8_t mbc_rom_read(uint16_t addr)
 		return dmg_boot_rom[addr];
 	}
 
-	if (addr <= 0x3FFF) {
-		if (mbc.rom_cached_id[0] != mbc.rom_id[0]) {
-			mbc.rom_id[0] = mbc.rom_cached_id[0];
-			hal_load(mbc.rd, rom_banks, mbc.rom_id[0]);
-		}
-		return *(rom_banks + addr);
-	} else if (addr <= 0x7FFF) {
-		if (mbc.rom_cached_id[1] != mbc.rom_id[1]) {
-			mbc.rom_id[1] = mbc.rom_cached_id[1];
-			hal_load(mbc.rd, rom_banks + ROM_BANK_SIZE,
-				 mbc.rom_id[1]);
-		}
-		return *(rom_banks + addr);
-	} else {
+	if (mbc.type == MBC_NO_MBC) {
+		return addr <= 0x7FFF ? rom_banks[addr] : 0xFF;
+	}
+
+	if (!mbc.ops || !mbc.ops->rom_read) {
 		return 0xFF;
 	}
+
+	return mbc.ops->rom_read(addr);
 }
 
 void mbc_ioctl(uint16_t addr, uint8_t value)
@@ -158,60 +151,6 @@ void mbc_ioctl(uint16_t addr, uint8_t value)
 		return;
 	}
 	mbc.ops->ioctl(addr, value);
-}
-
-void mbc1_ioctl(uint16_t addr, uint8_t value)
-{
-	/**
-	 * 0000–1FFF: RAM Enable (Write Only)
-	 * 2000–3FFF: ROM Bank Number (Write Only)
-	 * 4000–5FFF: RAM Bank Number or Upper Bits of ROM Bank Number (Write Only)
-	 * 6000–7FFF: Banking Mode Select (Write Only)
-	 */
-	uint8_t mode = mbc.ioctl_reg[3] & 0x01;
-
-	if (addr <= 0x1FFF) {
-		value &= 0x0F;
-		if (mbc.ram_size >= RAM_SIZE_8KB && value == 0x0A) {
-			mbc.ram_enabled = 1;
-		} else {
-			mbc.ram_enabled = 0;
-		}
-	} else if (addr <= 0x3FFF) {
-		value &= 0x1F;
-		if (!value) {
-			value = 1;
-		}
-		mbc.ioctl_reg[1] = value;
-
-		if (mbc.rom_size > ROM_SIZE_512KB) {
-			mbc.rom_cached_id[1] = (mbc.ioctl_reg[2] << 5) |
-					       mbc.ioctl_reg[1];
-		} else {
-			mbc.rom_cached_id[1] = mbc.ioctl_reg[1];
-		}
-		mbc.rom_cached_id[1] &= rom_size_mask[mbc.rom_size];
-
-	} else if (addr <= 0x5FFF) {
-		value &= 0x03;
-		mbc.ioctl_reg[2] = value;
-
-		if (mbc.rom_size > ROM_SIZE_512KB) {
-			mbc.rom_cached_id[0] =
-				mode == 0 ? 0 : (mbc.ioctl_reg[2] << 5);
-			mbc.rom_cached_id[0] &= rom_size_mask[mbc.rom_size];
-
-			mbc.rom_cached_id[1] = (mbc.ioctl_reg[2] << 5) |
-					       mbc.ioctl_reg[1];
-			mbc.rom_cached_id[1] &= rom_size_mask[mbc.rom_size];
-		} else if (mbc.ram_size == RAM_SIZE_32KB) {
-			mbc.ram_id = mbc.ioctl_reg[2];
-		} else {
-			mbc.ram_id = 0;
-		}
-	} else if (addr <= 0x7FFF) {
-		mbc.ioctl_reg[3] = value & 0x01;
-	}
 }
 
 void mbc_bootmap_write(uint8_t value)
@@ -226,21 +165,121 @@ void mbc_bootmap_write(uint8_t value)
 
 uint8_t mbc_ram_read(uint16_t addr)
 {
-	if (!mbc.ram_enabled || addr < 0xA000 || addr > 0xBFFF) {
+	if (addr < 0xA000 || addr > 0xBFFF) {
 		return 0xFF;
 	}
 
-	return *(ram_banks + RAM_BANK_SIZE * mbc.ram_id + addr - 0xA000);
+	if (!mbc.ops || !mbc.ops->ram_read) {
+		return 0xFF;
+	}
+
+	return mbc.ops->ram_read(addr);
 }
 
 void mbc_ram_write(uint16_t addr, uint8_t value)
 {
-	if (!mbc.ram_enabled || addr < 0xA000 || addr > 0xBFFF) {
+	if (addr < 0xA000 || addr > 0xBFFF) {
 		return;
 	}
 
-	*(ram_banks + RAM_BANK_SIZE * mbc.ram_id + addr - 0xA000) = value;
+	if (!mbc.ops || !mbc.ops->ram_write) {
+		return;
+	}
+
+	mbc.ops->ram_write(addr, value);
 }
+
+static uint8_t mbc1_rom_read(uint16_t addr)
+{
+	uint8_t mode = mbc.ioctl_reg[3];
+	uint8_t rom_id_expected = 0;
+
+	if (addr <= 0x3FFF) {
+		if (mode == 1 && mbc.rom_size > ROM_SIZE_512KB) {
+			rom_id_expected = (mbc.ioctl_reg[2] << 5);
+			rom_id_expected &= rom_size_mask[mbc.rom_size];
+		}
+
+		if (mbc.rom_id[0] != rom_id_expected) {
+			mbc.rom_id[0] = rom_id_expected;
+			hal_load(mbc.rd, rom_banks, rom_id_expected);
+		}
+	} else if (addr <= 0x7FFF) {
+		rom_id_expected = (mbc.ioctl_reg[2] << 5) | mbc.ioctl_reg[1];
+		rom_id_expected &= rom_size_mask[mbc.rom_size];
+
+		if (mbc.rom_id[1] != rom_id_expected) {
+			mbc.rom_id[1] = rom_id_expected;
+			hal_load(mbc.rd, rom_banks + ROM_BANK_SIZE,
+				 rom_id_expected);
+		}
+	} else {
+		return 0xFF;
+	}
+
+	return rom_banks[addr];
+}
+
+static void mbc1_ioctl(uint16_t addr, uint8_t value)
+{
+	/**
+	 * 0000–1FFF: RAM Enable (Write Only)
+	 * 2000–3FFF: ROM Bank Number (Write Only)
+	 * 4000–5FFF: RAM Bank Number or Upper Bits of ROM Bank Number (Write Only)
+	 * 6000–7FFF: Banking Mode Select (Write Only)
+	 */
+	if (addr <= 0x1FFF) {
+		mbc.ioctl_reg[0] = value & 0x0F;
+	} else if (addr <= 0x3FFF) {
+		value &= 0x1F;
+		if (!value) {
+			value = 1;
+		}
+		mbc.ioctl_reg[1] = value;
+	} else if (addr <= 0x5FFF) {
+		value &= 0x03;
+		mbc.ioctl_reg[2] = value;
+	} else if (addr <= 0x7FFF) {
+		mbc.ioctl_reg[3] = value & 0x01;
+	}
+}
+
+static uint8_t mbc1_ram_read(uint16_t addr)
+{
+	uint8_t ram_enabled = (mbc.ioctl_reg[0] == 0x0A);
+	if (!ram_enabled || mbc.ram_size < RAM_SIZE_8KB) {
+		return 0xFF;
+	}
+
+	uint8_t ram_id = 0;
+	if (mbc.ram_size == RAM_SIZE_32KB && mbc.ioctl_reg[3]) {
+		ram_id = mbc.ioctl_reg[2];
+	}
+
+	return (ram_banks + RAM_BANK_SIZE * ram_id)[addr - 0xA000];
+}
+
+static void mbc1_ram_write(uint16_t addr, uint8_t value)
+{
+	uint8_t ram_enabled = (mbc.ioctl_reg[0] == 0x0A);
+	if (!ram_enabled || mbc.ram_size < RAM_SIZE_8KB) {
+		return;
+	}
+
+	uint8_t ram_id = 0;
+	if (mbc.ram_size == RAM_SIZE_32KB && mbc.ioctl_reg[3]) {
+		ram_id = mbc.ioctl_reg[2];
+	}
+
+	(ram_banks + RAM_BANK_SIZE * ram_id)[addr - 0xA000] = value;
+}
+
+static struct mbc_ops mbc1_ops = {
+	.rom_read = mbc1_rom_read,
+	.ioctl = mbc1_ioctl,
+	.ram_read = mbc1_ram_read,
+	.ram_write = mbc1_ram_write,
+};
 
 static uint8_t mbc_check_size(void)
 {
@@ -258,6 +297,7 @@ static uint8_t mbc_check_size(void)
 		}
 		break;
 	case MBC_MBC1_RAM:
+	case MBC_MBC1_RAM_BATTERY:
 		if (mbc.rom_size > ROM_SIZE_2MB ||
 		    (mbc.rom_size > ROM_SIZE_512KB &&
 		     mbc.ram_size > RAM_SIZE_8KB) ||
@@ -272,10 +312,6 @@ static uint8_t mbc_check_size(void)
 
 	return 0;
 }
-
-static struct mbc_ops mbc1_ops = {
-	.ioctl = mbc1_ioctl,
-};
 
 uint8_t mbc_init(const char *rom_path)
 {
@@ -297,14 +333,14 @@ uint8_t mbc_init(const char *rom_path)
 	if (rc)
 		goto error;
 
-	mbc.type = MBC_INVALID_TYPE;
+	mbc.type = MBC_NO_SUCH_TYPE;
 	for (int i = 0; i < MAX_MBC_SUPPORT; i++) {
 		if (mbc_supported[i] == mbc_header->mbc_type) {
 			mbc.type = mbc_header->mbc_type;
 			break;
 		}
 	}
-	if (mbc.type == MBC_INVALID_TYPE)
+	if (mbc.type == MBC_NO_SUCH_TYPE)
 		goto error;
 
 #ifdef USE_BOOT_ROM
@@ -318,17 +354,18 @@ uint8_t mbc_init(const char *rom_path)
 	if (mbc_check_size())
 		goto error;
 
-	mbc.ram_enabled = 0;
-	mbc.ram_id = 0;
-
-	mbc.rom_cached_id[0] = 0;
-	mbc.rom_cached_id[1] = 1;
 	mbc.rom_id[0] = 0;
 	mbc.rom_id[1] = 1;
+
+	mbc.ioctl_reg[0] = 0;
+	mbc.ioctl_reg[1] = 1;
+	mbc.ioctl_reg[2] = 0;
+	mbc.ioctl_reg[3] = 0;
 
 	switch (mbc.type) {
 	case MBC_MBC1:
 	case MBC_MBC1_RAM:
+	case MBC_MBC1_RAM_BATTERY:
 		mbc.ops = &mbc1_ops;
 		break;
 	default:
