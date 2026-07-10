@@ -3,6 +3,7 @@
 
 uint8_t mbc_rom_read(uint16_t addr);
 void mbc_ioctl(uint16_t addr, uint8_t value);
+
 void mbc_bootmap_write(uint8_t value);
 
 uint8_t mbc_ram_read(uint16_t addr);

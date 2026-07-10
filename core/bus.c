@@ -135,7 +135,7 @@ uint8_t bus_read8(uint16_t addr)
 void bus_write8(uint16_t addr, uint8_t value)
 {
 	if (addr <= 0x7FFF) {
-		/** TODO: ROM bank switch */
+		mbc_ioctl(addr, value);
 	} else if (addr <= 0x9FFF) {
 		ppu_vram_write(addr, value);
 	} else if (addr <= 0xBFFF) {

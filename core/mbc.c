@@ -5,7 +5,7 @@
 
 struct mbc_ops {
 	uint8_t (*rom_read)(uint16_t addr);
-	void (*ioctl)(uint16_t addr);
+	void (*ioctl)(uint16_t addr, uint8_t value);
 	uint8_t (*ram_read)(uint16_t addr);
 	void (*ram_write)(uint16_t addr, uint8_t value);
 };
@@ -13,6 +13,9 @@ struct mbc_ops {
 struct mbc_type {
 	uint8_t type;
 	uint8_t boot_rom_mapped;
+
+	uint8_t rom_size;
+	uint8_t ram_size;
 
 	uint8_t ram_enabled;
 	uint8_t ram_id;
@@ -54,6 +57,24 @@ static uint8_t mbc_check_header(struct mbc_header *header)
 
 	return checksum == header->header_checksum ? 0 : 1;
 }
+
+#define ROM_SIZE_32KB 0x00
+#define ROM_SIZE_64KB 0x01
+#define ROM_SIZE_128KB 0x02
+#define ROM_SIZE_256KB 0x03
+#define ROM_SIZE_512KB 0x04
+#define ROM_SIZE_1MB 0x05
+#define ROM_SIZE_2MB 0x06
+#define ROM_SIZE_4MB 0x07
+
+static uint8_t rom_size_mask[] = {
+	0x01, 0x03, 0x07, 0x0F, 0x1F, 0X3F, 0x7F, 0xFF,
+};
+
+#define RAM_SIZE_0KB 0x00
+#define RAM_SIZE_UNUSED 0x01
+#define RAM_SIZE_8KB 0x02
+#define RAM_SIZE_32KB 0x03
 
 #define ROM_BANK_SIZE 16384
 #define RAM_BANK_SIZE 8192
@@ -103,6 +124,7 @@ static uint8_t dmg_boot_rom[256] = {
 static uint8_t mbc_supported[MAX_MBC_SUPPORT] = {
 	MBC_NO_MBC,
 	MBC_MBC1,
+	MBC_MBC1_RAM,
 };
 static struct mbc_type mbc;
 
@@ -130,11 +152,66 @@ uint8_t mbc_rom_read(uint16_t addr)
 	}
 }
 
-/**
- * TODO:
- */
 void mbc_ioctl(uint16_t addr, uint8_t value)
 {
+	if (addr > 0x7FFF || !mbc.ops || !mbc.ops->ioctl) {
+		return;
+	}
+	mbc.ops->ioctl(addr, value);
+}
+
+void mbc1_ioctl(uint16_t addr, uint8_t value)
+{
+	/**
+	 * 0000–1FFF: RAM Enable (Write Only)
+	 * 2000–3FFF: ROM Bank Number (Write Only)
+	 * 4000–5FFF: RAM Bank Number or Upper Bits of ROM Bank Number (Write Only)
+	 * 6000–7FFF: Banking Mode Select (Write Only)
+	 */
+	uint8_t mode = mbc.ioctl_reg[3] & 0x01;
+
+	if (addr <= 0x1FFF) {
+		value &= 0x0F;
+		if (mbc.ram_size >= RAM_SIZE_8KB && value == 0x0A) {
+			mbc.ram_enabled = 1;
+		} else {
+			mbc.ram_enabled = 0;
+		}
+	} else if (addr <= 0x3FFF) {
+		value &= 0x1F;
+		if (!value) {
+			value = 1;
+		}
+		mbc.ioctl_reg[1] = value;
+
+		if (mbc.rom_size > ROM_SIZE_512KB) {
+			mbc.rom_cached_id[1] = (mbc.ioctl_reg[2] << 5) |
+					       mbc.ioctl_reg[1];
+		} else {
+			mbc.rom_cached_id[1] = mbc.ioctl_reg[1];
+		}
+		mbc.rom_cached_id[1] &= rom_size_mask[mbc.rom_size];
+
+	} else if (addr <= 0x5FFF) {
+		value &= 0x03;
+		mbc.ioctl_reg[2] = value;
+
+		if (mbc.rom_size > ROM_SIZE_512KB) {
+			mbc.rom_cached_id[0] =
+				mode == 0 ? 0 : (mbc.ioctl_reg[2] << 5);
+			mbc.rom_cached_id[0] &= rom_size_mask[mbc.rom_size];
+
+			mbc.rom_cached_id[1] = (mbc.ioctl_reg[2] << 5) |
+					       mbc.ioctl_reg[1];
+			mbc.rom_cached_id[1] &= rom_size_mask[mbc.rom_size];
+		} else if (mbc.ram_size == RAM_SIZE_32KB) {
+			mbc.ram_id = mbc.ioctl_reg[2];
+		} else {
+			mbc.ram_id = 0;
+		}
+	} else if (addr <= 0x7FFF) {
+		mbc.ioctl_reg[3] = value & 0x01;
+	}
 }
 
 void mbc_bootmap_write(uint8_t value)
@@ -165,22 +242,55 @@ void mbc_ram_write(uint16_t addr, uint8_t value)
 	*(ram_banks + RAM_BANK_SIZE * mbc.ram_id + addr - 0xA000) = value;
 }
 
+static uint8_t mbc_check_size(void)
+{
+	switch (mbc.type) {
+	case MBC_NO_MBC:
+		if (mbc.rom_size != ROM_SIZE_32KB ||
+		    mbc.ram_size != RAM_SIZE_0KB) {
+			return 1;
+		}
+		break;
+	case MBC_MBC1:
+		if (mbc.rom_size > ROM_SIZE_2MB ||
+		    mbc.ram_size != RAM_SIZE_0KB) {
+			return 1;
+		}
+		break;
+	case MBC_MBC1_RAM:
+		if (mbc.rom_size > ROM_SIZE_2MB ||
+		    (mbc.rom_size > ROM_SIZE_512KB &&
+		     mbc.ram_size > RAM_SIZE_8KB) ||
+		    mbc.ram_size > RAM_SIZE_32KB ||
+		    mbc.ram_size == RAM_SIZE_UNUSED) {
+			return 1;
+		}
+		break;
+	default:
+		return 1;
+	}
+
+	return 0;
+}
+
+static struct mbc_ops mbc1_ops = {
+	.ioctl = mbc1_ioctl,
+};
+
 uint8_t mbc_init(const char *rom_path)
 {
 	mbc.rd = hal_open(rom_path);
 	if (mbc.rd == NULL) {
-		return -1;
+		return 1;
 	}
 
 	int rc = hal_load(mbc.rd, rom_banks, 0);
-	if (rc) {
-		return -1;
-	}
+	if (rc)
+		goto error;
 
 	struct mbc_header *mbc_header =
 		(struct mbc_header *)(rom_banks + 0x100);
-	rc = mbc_check_header(mbc_header);
-	if (rc)
+	if (mbc_check_header(mbc_header))
 		goto error;
 
 	rc = hal_load(mbc.rd, rom_banks + ROM_BANK_SIZE, 1);
@@ -203,7 +313,12 @@ uint8_t mbc_init(const char *rom_path)
 	mbc.boot_rom_mapped = 0;
 #endif
 
-	mbc.ram_enabled = 1;
+	mbc.rom_size = mbc_header->rom_size;
+	mbc.ram_size = mbc_header->ram_size;
+	if (mbc_check_size())
+		goto error;
+
+	mbc.ram_enabled = 0;
 	mbc.ram_id = 0;
 
 	mbc.rom_cached_id[0] = 0;
@@ -211,9 +326,15 @@ uint8_t mbc_init(const char *rom_path)
 	mbc.rom_id[0] = 0;
 	mbc.rom_id[1] = 1;
 
-	/**
-	 * TODO: ops
-	 */
+	switch (mbc.type) {
+	case MBC_MBC1:
+	case MBC_MBC1_RAM:
+		mbc.ops = &mbc1_ops;
+		break;
+	default:
+		mbc.ops = NULL;
+		break;
+	}
 
 	return 0;
 
@@ -223,9 +344,10 @@ error:
 	return 1;
 }
 
-/**
- * TODO:
- */
 void mbc_exit(void)
 {
+	if (mbc.rd) {
+		hal_close(mbc.rd);
+		mbc.rd = NULL;
+	}
 }
