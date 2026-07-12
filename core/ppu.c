@@ -1,6 +1,9 @@
 #include <stdint.h>
+#include <gamebox/gamebox.h>
 #include "bus.h"
 #include "cpu.h"
+
+extern struct platform *platform;
 
 /**
  * PPU registers read/write
@@ -507,8 +510,7 @@ static uint8_t obj_pixel_at(uint8_t x, uint8_t y)
 /**
  * The color values for current scan line
  */
-uint8_t line_buf[160];
-uint8_t line_id;
+uint8_t line_colors[160];
 
 static void ppu_draw_line(void)
 {
@@ -537,13 +539,10 @@ static void ppu_draw_line(void)
 			}
 		}
 
-		line_buf[i] = color & COLOR_MASK;
+		line_colors[i] = color & COLOR_MASK;
 	}
 
-	/**
-	 * TODO: draw line on the screen
-	 */
-	line_id = ppu.ly;
+	platform->submit_line(line_colors, ppu.ly);
 }
 
 void ppu_step(uint8_t ticks)

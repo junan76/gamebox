@@ -1,9 +1,11 @@
 #include <stdint.h>
 #include <stdio.h>
 
+#include <gamebox/gamebox.h>
 #include "cpu.h"
 #include "device.h"
 
+extern struct platform *platform;
 /**
  * Joypad device
  */
@@ -77,8 +79,9 @@ uint8_t serial_buffer_read(void)
 void serial_buffer_write(uint8_t value)
 {
 	sb = value;
-	/** TODO: printf for debug only, remove it later */
-	printf("%c", sb);
+	if (platform->serial_debug) {
+		platform->serial_debug(value);
+	}
 }
 
 uint8_t serial_control_read(void)

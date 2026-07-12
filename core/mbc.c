@@ -1,7 +1,8 @@
 #include <stdint.h>
 #include <stddef.h>
 
-#include <gamebox/hal.h>
+#include <gamebox/gamebox.h>
+extern struct platform *platform;
 
 struct mbc_ops {
 	uint8_t (*rom_read)(uint16_t addr);
@@ -202,7 +203,7 @@ static uint8_t mbc1_rom_read(uint16_t addr)
 
 		if (mbc.rom_id[0] != rom_id_expected) {
 			mbc.rom_id[0] = rom_id_expected;
-			hal_load(mbc.rd, rom_banks, rom_id_expected);
+			platform->read(mbc.rd, rom_banks, rom_id_expected);
 		}
 	} else if (addr <= 0x7FFF) {
 		rom_id_expected = (mbc.ioctl_reg[2] << 5) | mbc.ioctl_reg[1];
@@ -210,8 +211,8 @@ static uint8_t mbc1_rom_read(uint16_t addr)
 
 		if (mbc.rom_id[1] != rom_id_expected) {
 			mbc.rom_id[1] = rom_id_expected;
-			hal_load(mbc.rd, rom_banks + ROM_BANK_SIZE,
-				 rom_id_expected);
+			platform->read(mbc.rd, rom_banks + ROM_BANK_SIZE,
+				       rom_id_expected);
 		}
 	} else {
 		return 0xFF;
@@ -315,12 +316,12 @@ static uint8_t mbc_check_size(void)
 
 uint8_t mbc_init(const char *rom_path)
 {
-	mbc.rd = hal_open(rom_path);
+	mbc.rd = platform->open(rom_path);
 	if (mbc.rd == NULL) {
 		return 1;
 	}
 
-	int rc = hal_load(mbc.rd, rom_banks, 0);
+	int rc = platform->read(mbc.rd, rom_banks, 0);
 	if (rc)
 		goto error;
 
@@ -329,7 +330,7 @@ uint8_t mbc_init(const char *rom_path)
 	if (mbc_check_header(mbc_header))
 		goto error;
 
-	rc = hal_load(mbc.rd, rom_banks + ROM_BANK_SIZE, 1);
+	rc = platform->read(mbc.rd, rom_banks + ROM_BANK_SIZE, 1);
 	if (rc)
 		goto error;
 
@@ -376,7 +377,7 @@ uint8_t mbc_init(const char *rom_path)
 	return 0;
 
 error:
-	hal_close(mbc.rd);
+	platform->close(mbc.rd);
 	mbc.rd = NULL;
 	return 1;
 }
@@ -384,7 +385,7 @@ error:
 void mbc_exit(void)
 {
 	if (mbc.rd) {
-		hal_close(mbc.rd);
+		platform->close(mbc.rd);
 		mbc.rd = NULL;
 	}
 }

@@ -1,1 +1,0 @@
-add_library(gb_hal STATIC linux.c)

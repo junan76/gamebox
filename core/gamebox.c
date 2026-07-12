@@ -1,10 +1,31 @@
 #include <stdint.h>
+#include <stddef.h>
 
-#include <gamebox/hal.h>
+#include <gamebox/gamebox.h>
 #include "cpu.h"
 #include "ppu.h"
 #include "device.h"
 #include "mbc.h"
+
+static uint8_t gb_step(void)
+{
+	uint8_t ticks = cpu_step();
+	timer_step(ticks);
+	ppu_step(ticks);
+
+	return ticks;
+}
+
+struct platform *platform;
+
+uint8_t gb_register_platform(struct platform *p)
+{
+	if (p == NULL || platform != NULL) {
+		return 1;
+	}
+	platform = p;
+	return 0;
+}
 
 uint8_t gb_init(const char *rom_path)
 {
@@ -19,14 +40,16 @@ uint8_t gb_init(const char *rom_path)
 	return 0;
 }
 
-uint8_t gb_step(uint8_t keys)
+void gb_run_frame(void)
 {
-	// uint8_t keys = hal_input_poll();
+	static uint32_t ticks = 0;
+
+	uint8_t keys = platform->poll_input();
 	joypad_report_keys(keys);
 
-	uint8_t ticks = cpu_step();
-	timer_step(ticks);
-	ppu_step(ticks);
+	while (ticks < 70224) {
+		ticks += gb_step();
+	}
 
-	return ticks;
+	ticks %= 70224;
 }
