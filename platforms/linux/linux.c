@@ -8,6 +8,8 @@
 #include <gamebox/gamebox.h>
 
 #define SZ_16KB 16384
+#define WINDOW_WIDTH (160 * 2)
+#define WINDOW_HEIGHT (144 * 2)
 
 static Color *pixels = NULL;
 static Image image;
@@ -82,7 +84,7 @@ static uint8_t input_poll_keys(void)
 
 static void submit_line_pixels(uint8_t *line, uint8_t lid)
 {
-	static const Color pallete[4] = {
+	static const Color palette[4] = {
 		{ 155, 188, 15, 255 },
 		{ 139, 172, 15, 255 },
 		{ 48, 98, 48, 255 },
@@ -95,7 +97,7 @@ static void submit_line_pixels(uint8_t *line, uint8_t lid)
 
 	for (int i = 0; i < 160; i++) {
 		uint8_t color = line[i] & 0x03;
-		pixels[160 * lid + i] = pallete[color];
+		pixels[160 * lid + i] = palette[color];
 	}
 }
 
@@ -127,7 +129,7 @@ uint8_t platform_init(const char *rom)
 		return 1;
 	}
 
-	InitWindow(160 + 10, 144 + 10, "gbox");
+	InitWindow(WINDOW_WIDTH, WINDOW_HEIGHT, "gbox");
 
 	pixels = (Color *)MemAlloc(160 * 144 * sizeof(Color));
 
@@ -158,7 +160,20 @@ uint8_t platform_run(void)
 
 		BeginDrawing();
 		ClearBackground(RAYWHITE);
-		DrawTexture(frame, 5, 5, WHITE);
+		DrawTexturePro(frame,
+			       (Rectangle){
+				       0,
+				       0,
+				       160,
+				       144,
+			       },
+			       (Rectangle){
+				       0,
+				       0,
+				       WINDOW_WIDTH,
+				       WINDOW_HEIGHT,
+			       },
+			       (Vector2){ 0, 0 }, 0, WHITE);
 		EndDrawing();
 	}
 
