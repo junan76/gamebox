@@ -1,137 +1,112 @@
-# gamebox
+# Gamebox
 
-A cross platform gameboy emulator.
+A cross-platform Game Boy (DMG) emulator written in C, designed to run on both
+desktop systems and resource-constrained microcontrollers.
 
-## The Design
+<p align="left">
+  <img src="./assets/img/tetris.gif" width="20%" />
+  <img src="./assets/img/donkey-kong.gif" width="20%" />
+  <img src="./assets/img/super-mario.gif" width="20%" />
+</p>
 
-### Application layer
+## Features
 
-### Core emulator layer
+- **CPU**: full SM83 instruction set, passes Blargg's `cpu_instrs` test ROM
+- **PPU**: scanline-based renderer with background, window and sprite support
+- **Cartridges**: ROM only, MBC1, MBC1+RAM, MBC1+RAM+BATTERY
+- **Boot ROM**: optional DMG boot ROM support (`ENABLE_BOOT_ROM` CMake option)
+- **Input**: joypad with interrupt support
+- **Timer / interrupts**: DIV, TIMA/TMA/TAC and the full interrupt dispatch
+- **Serial**: debug output over the serial port (used by test ROMs)
 
-1. cpu(DONE)
-2. ppu(DOING)
-3. apu(TODO)
-5. bus(DONE)
-6. devices
-   - joypad(DONE)
-   - serial(DONE)
-   - timer(DONE)
-7. mbc(DOING)
+## Architecture
 
+The emulator core is fully platform-agnostic. All platform services (ROM
+access, input, video output, audio, timing) go through a single callback
+interface defined in `include/gamebox/gamebox.h`:
 
-### HAL layer
+```c
+struct platform {
+    void *(*open)(const char *rom);
+    void (*close)(void *rd);
+    uint8_t (*read)(void *rd, uint8_t *buf, uint8_t bid);
 
-1. fs
-   - hal_open
-   - hal_close
-   - hal_load
-2. input
-   - hal_input_poll
-3. graphics
-   - hal_draw_line
-4. audio
-   - hal_audio_play
-5. time
-   - hal_delay
-6. init/deinit
-   - hal_init
-   - hal_exit
+    uint8_t (*poll_input)(void);
+    void (*submit_line)(uint8_t *line, uint8_t ly);
+    void (*submit_audio)(uint8_t *audio);
 
-### Drivers layer
+    void (*delay)(uint8_t ms);
+    void (*serial_debug)(uint8_t c);
+};
+```
 
-### Ports layer
+A platform registers its callbacks with `gb_register_platform()`, calls
+`gb_init()`, then drives the emulator one frame at a time with
+`gb_run_frame()`. ROM data is loaded on demand in 16 KB banks through the
+`read` callback, so the core never needs the whole ROM in memory — a key
+requirement for MCU targets. Rendered scanlines are pushed out through
+`submit_line`, one line at a time, which maps naturally onto both desktop
+framebuffers and SPI LCD controllers.
 
-### MCU specific SDK layer
+```
+gamebox/
+├── core/        # platform-independent emulator core (CPU, PPU, MBC, bus, devices)
+├── include/     # public API (gamebox/gamebox.h)
+├── platforms/   # platform layers (Linux/raylib today, MCU ports planned)
+├── assets/      # demo media
+└── tests/       # test resources
+```
 
----
+## Supported Platforms
 
-## CPU Instruction Set
+- [x] Linux (raylib)
+- [ ] MacOS
+- [ ] MCU
+  - [ ] STM32
+  - [ ] RP2040
+  - [ ] RP2350
+  - [ ] ESP32
 
-### 8-bit load instructions
+## Building (Linux)
 
-- [x] ld r8, r8
-- [x] ld r8, n8
-- [x] ld r8, [hl]
-- [x] ld [hl], r8
-- [x] ld [hl], n8
-- [x] ld a, [r16]
-- [x] ld [r16], a
-- [x] ld a, [n16]
-- [x] ld [n16], a
-- [x] ldh a, [c]
-- [x] ldh [c], a
-- [x] ldh a, [n8]
-- [x] ldh [n8], a
-- [x] ld a, [hl-]
-- [x] ld [hl-], a
-- [x] ld a, [hl+]
-- [x] ld [hl+], a
+Requirements:
 
-### 16-bit load instructions
+- CMake >= 3.28
+- A C compiler (GCC or Clang)
+- [raylib](https://www.raylib.com/)
 
-- [x] ld r16, n16
-- [x] ld [n16], sp
-- [x] ld sp, hl
-- [x] push r16
-- [x] pop r16
-- [x] ld hl, sp+e8
+```sh
+cmake -B build
+cmake --build build
+```
 
-### 8-bit arithmetic and logical instructions
-- [x] add a, r8
-- [x] add a, [hl]
-- [x] add a, n8
-- [x] adc a, r8
-- [x] adc a, [hl]
-- [x] adc a, n8
-- [x] sub a, r8
-- [x] sub a, [hl]
-- [x] sub a, n8
-- [x] sbc a, r8
-- [x] sbc a, [hl]
-- [x] sbc a, n8
-- [x] cp a, r8
-- [x] cp a, [hl]
-- [x] cp a, n8
-- [x] inc r8
-- [x] inc [hl]
-- [x] dec r8
-- [x] dec [hl]
-- [x] and a, r8
-- [x] and a, [hl]
-- [x] and a, n8
-- [x] or a, r8
-- [x] or a, [hl]
-- [x] or a, n8
-- [x] xor a, r8
-- [x] xor a, [hl]
-- [x] xor a, n8
-- [x] ccf
-- [x] scf
-- [x] daa
-- [x] cpl
+The DMG boot ROM is enabled by default; pass `-DENABLE_BOOT_ROM=OFF` to skip
+the boot animation.
 
-### 16-bit arithmetic instructions
-- [x] inc r16
-- [x] dec r16
-- [x] add hl, r16
-- [x] add sp, e8
+## Running
 
-### Control flow instructions
-- [x] jp n16
-- [x] jp hl
-- [x] jp cc, n16
-- [x] jr e8
-- [x] jr cc, e8
-- [x] call n16
-- [x] call cc, n16
-- [x] ret
-- [x] ret cc
-- [x] reti
+```sh
+./build/platforms/gamebox path/to/rom.gb
+```
 
-### Miscellaneous instructions
+### Controls
 
-- [x] halt
-- [x] stop
-- [x] di
-- [x] ei
-- [x] nop
+| Game Boy | Keyboard    |
+| -------- | ----------- |
+| D-Pad    | `W A S D`   |
+| A        | `O`         |
+| B        | `K`         |
+| Select   | `Space`     |
+| Start    | `Enter`     |
+
+## Roadmap
+
+- APU (audio) emulation
+- MBC3 / MBC5 cartridge support and battery-backed save persistence
+- PPU accuracy improvements (dmg-acid2)
+- Timer accuracy improvements (mooneye-gb test suite)
+- MCU ports with SD-card ROM selection menu
+
+## License
+
+Licensed under the [GNU General Public License v3.0](./LICENSE).
